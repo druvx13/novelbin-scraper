@@ -9,7 +9,7 @@
  *     NovelTitle(1-100).html, NovelTitle(101-200).html, ...
  *
  * @package   NovelBinScraper
- * @author    druvx (https://github.com/druvx13)
+ * @author    Dhruv Solanki (https://github.com/druvx13)
  * @license   MIT
  * @version   2.1
  *
