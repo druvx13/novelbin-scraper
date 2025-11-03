@@ -8,6 +8,11 @@
  * - Splits the novel into parts (default 100 chapters per file). Files named:
  *     NovelTitle(1-100).html, NovelTitle(101-200).html, ...
  *
+ * @package   NovelBinScraper
+ * @author    druvx (https://github.com/druvx13)
+ * @license   MIT
+ * @version   2.1
+ *
  * Usage:
  *   php novelbin.php --url "<URL>" [--out "Name"] [--start N] [--end N]
  *                    [--throttle 1.0] [--download] [--group-size 100] [--help]
