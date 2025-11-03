@@ -110,14 +110,25 @@ CSS;
 /* --------------------------- Utilities --------------------------- */
 
 /**
- * Print to STDERR.
+ * Prints a message to STDERR, ensuring it's visible for logging purposes
+ * even if STDOUT is redirected.
+ *
+ * @param string $msg The message to be written to STDERR.
  */
 function eprint(string $msg = ''): void {
     fwrite(STDERR, $msg . PHP_EOL);
 }
 
 /**
- * Simple HTTP GET with cURL.
+ * Performs a robust HTTP GET request using cURL with settings appropriate for web scraping.
+ * This includes a custom user-agent, support for redirects, and error handling.
+ *
+ * @param string $url The URL to fetch.
+ * @param array $headers An optional array of custom HTTP headers to send with the request.
+ * @param int $timeout The maximum time in seconds to allow the cURL function to execute.
+ * @return string The raw HTML content of the response body.
+ * @throws RuntimeException If a cURL network error occurs (e.g., DNS failure, timeout)
+ *                          or if the server responds with an HTTP status code of 400 or higher.
  */
 function http_get(string $url, array $headers = [], int $timeout = 60): string {
     $ch = curl_init();
@@ -147,33 +158,47 @@ function http_get(string $url, array $headers = [], int $timeout = 60): string {
 }
 
 /**
- * Sleep for fractional seconds.
+ * Pauses script execution for a specified duration to respect server rate limits.
+ * This function is critical for preventing IP bans and ensuring responsible scraping.
+ *
+ * @param float $seconds The number of seconds to sleep. Fractional values are supported.
  */
 function throttle(float $seconds): void {
     if ($seconds > 0) usleep((int)($seconds * 1_000_000));
 }
 
 /**
- * Sanitize string to safe filename.
+ * Sanitizes a string to make it a valid and safe filename. It removes illegal characters,
+ * collapses whitespace, and truncates the length to prevent filesystem errors.
+ *
+ * @param string $name The raw input string, typically a novel title.
+ * @return string A sanitized, filesystem-safe filename.
  */
 function sanitize_filename(string $name): string {
     $name = trim($name);
+    // Remove characters that are illegal in filenames across most OSs.
     $name = preg_replace('/[<>:"\/\\\\|?*\x00-\x1F]/u', '', $name);
+    // Collapse multiple whitespace characters into a single space.
     $name = preg_replace('/\s+/', ' ', $name);
+    // Truncate to a reasonable length to avoid issues with path length limits.
     $name = trim(substr($name, 0, 240));
+    // Default to 'novel' if the name becomes empty after sanitization.
     if ($name === '') $name = 'novel';
     return $name;
 }
 
 /**
- * Load HTML into DOMDocument and create XPath.
+ * Loads a string of HTML into a DOMDocument object for parsing, and prepares a
+ * DOMXPath object for querying. This function suppresses common HTML5 parsing
+ * errors and ensures UTF-8 encoding.
  *
- * Returns [DOMDocument, DOMXPath].
+ * @param string $html The HTML content to load.
+ * @return array A tuple `[DOMDocument, DOMXPath]` for immediate use in parsing tasks.
  */
 function load_dom(string $html): array {
     libxml_use_internal_errors(true);
     $doc = new DOMDocument();
-    // force utf-8
+    // Prepending the XML encoding declaration forces the parser to interpret the string as UTF-8.
     $doc->loadHTML('<?xml encoding="utf-8" ?>' . $html, LIBXML_NOWARNING | LIBXML_NOERROR);
     $xpath = new DOMXPath($doc);
     libxml_clear_errors();
@@ -181,7 +206,13 @@ function load_dom(string $html): array {
 }
 
 /**
- * Remove nodes matching XPath.
+ * Finds and removes all DOM nodes that match a given XPath expression, cleaning
+ * the document tree.
+ *
+ * @param DOMXPath $xpath The DOMXPath object linked to the document.
+ * @param string $expr The XPath query expression for the nodes to remove.
+ * @param DOMNode|null $context An optional context node to perform the query within.
+ *                              If null, the query is performed on the entire document.
  */
 function remove_nodes_by_xpath(DOMXPath $xpath, string $expr, ?DOMNode $context = null): void {
     $nodes = $xpath->query($expr, $context);
@@ -192,7 +223,11 @@ function remove_nodes_by_xpath(DOMXPath $xpath, string $expr, ?DOMNode $context 
 }
 
 /**
- * Inner HTML of a node.
+ * Reconstructs the inner HTML content of a given DOMNode as a string.
+ * This is equivalent to JavaScript's `element.innerHTML`.
+ *
+ * @param DOMNode $node The node whose children are to be serialized.
+ * @return string The serialized HTML of the node's children.
  */
 function inner_html(DOMNode $node): string {
     $html = '';
@@ -203,10 +238,18 @@ function inner_html(DOMNode $node): string {
 }
 
 /**
- * Join base URL and relative URL.
+ * Resolves a relative URL against a base URL to produce an absolute URL.
+ * Handles various cases like protocol-relative URLs (`//...`), absolute paths (`/...`),
+ * and relative paths (`./...`, `../../...`).
+ *
+ * @param string $base The full base URL (e.g., "https://example.com/path/to/page").
+ * @param string $rel The relative URL to resolve.
+ * @return string The resulting absolute URL.
  */
 function url_join(string $base, string $rel): string {
+    // If the relative URL is already absolute, return it.
     if (preg_match('#^https?://#i', $rel)) return $rel;
+    // Handle protocol-relative URLs.
     if (str_starts_with($rel, '//')) {
         $scheme = parse_url($base, PHP_URL_SCHEME) ?: 'https';
         return "$scheme:$rel";
@@ -217,11 +260,14 @@ function url_join(string $base, string $rel): string {
     $host = $parts['host'] ?? '';
     $port = isset($parts['port']) ? ':' . $parts['port'] : '';
     $path = $parts['path'] ?? '/';
+    // Handle root-relative URLs.
     if (str_starts_with($rel, '/')) {
         return "$scheme://$host$port$rel";
     }
+    // Handle path-relative URLs.
     $dir = preg_replace('#/[^/]*$#', '/', $path);
     $abs = "$scheme://$host$port" . rtrim($dir, '/') . '/' . ltrim($rel, '/');
+    // Resolve '/./' and '/../' segments.
     $abs = preg_replace('#(/\.?/)#', '/', $abs);
     while (preg_match('#/[^/]+/\.\./#', $abs)) {
         $abs = preg_replace('#/[^/]+/\.\./#', '/', $abs, 1);
@@ -230,11 +276,19 @@ function url_join(string $base, string $rel): string {
 }
 
 /**
- * Clean an HTML fragment: remove scripts/styles, strip many classes, fix relative links.
+ * Aggressively cleans an HTML fragment by removing non-content elements like scripts,
+ * styles, and common boilerplate containers. It also resolves relative URLs for
+ * attributes like `src` and `href` and strips most styling attributes.
+ *
+ * @param string $html The raw HTML fragment.
+ * @param string $baseUrl The base URL needed to resolve any relative links within the fragment.
+ * @return string The cleaned, content-focused HTML.
  */
 function clean_fragment_html(string $html, string $baseUrl = ''): string {
     [$doc, $xpath] = load_dom($html);
+    // Remove elements that are never part of the content.
     remove_nodes_by_xpath($xpath, '//script|//style|//noscript|//comment()');
+    // A list of XPath selectors for common boilerplate/junk containers.
     $patterns = [
         "//*[contains(@class,'breadcrumb')]",
         "//*[contains(@class,'navbar')]",
@@ -252,6 +306,7 @@ function clean_fragment_html(string $html, string $baseUrl = ''): string {
         "//aside", "//footer", "//header", "//nav"
     ];
     foreach ($patterns as $p) remove_nodes_by_xpath($xpath, $p);
+    // Resolve relative URLs in `src` and `href` attributes.
     if ($baseUrl !== '') {
         foreach ($xpath->query('//*[@src or @href]') as $el) {
             if ($el->hasAttribute('src')) {
@@ -268,6 +323,7 @@ function clean_fragment_html(string $html, string $baseUrl = ''): string {
             }
         }
     }
+    // Strip all attributes except for a few content-relevant ones.
     foreach ($xpath->query('//*') as $el) {
         $keep = [];
         foreach (['href', 'src', 'alt', 'title'] as $attr) {
@@ -287,13 +343,21 @@ function clean_fragment_html(string $html, string $baseUrl = ''): string {
 /* --------------------------- Chapter fetching --------------------------- */
 
 /**
- * Try to find chapter content from a chapter page.
- * Returns ['title' => string, 'content' => string]
+ * Fetches and extracts the title and content of a single chapter from its URL.
+ * It uses a heuristic-based approach to find the main content block by scoring
+ * candidate elements based on text length and paragraph count.
+ *
+ * @param string $url The URL of the chapter page to scrape.
+ * @param float $throttle The delay to enforce before making the HTTP request.
+ * @return array An associative array with 'title' and 'content' keys.
+ *               Returns empty strings if content/title could not be found.
+ * @throws RuntimeException If the HTTP request fails.
  */
 function fetch_chapter_content(string $url, float $throttle = 1.0): array {
     throttle($throttle);
     $html = http_get($url);
     [$doc, $xpath] = load_dom($html);
+    // A list of candidate XPath selectors for the main content container.
     $candidates = [
         "//*[@id='chr-content']",
         "//*[contains(@class,'chr-c')]",
@@ -309,7 +373,9 @@ function fetch_chapter_content(string $url, float $throttle = 1.0): array {
         $nodes = @$xpath->query($xp);
         if (!$nodes || $nodes->length === 0) continue;
         foreach ($nodes as $node) {
+            // Pre-clean the candidate node to remove obvious non-content.
             remove_nodes_by_xpath($xpath, ".//form|.//button|.//input|.//textarea|.//*[contains(@class,'comment')]|.//*[contains(@class,'share')]", $node);
+            // Attempt to find and extract the chapter title.
             $titleNode = null;
             foreach (['.//h1', './/h2', './/h3', './/h4'] as $tq) {
                 $tqNodes = $xpath->query($tq, $node);
@@ -320,10 +386,13 @@ function fetch_chapter_content(string $url, float $throttle = 1.0): array {
             }
             if ($titleNode) {
                 $foundTitle = trim(preg_replace('/\s+/', ' ', $titleNode->textContent));
+                // Remove the title node from the content.
                 $titleNode->parentNode?->removeChild($titleNode);
+                // Clean up redundant "Chapter X" prefixes.
                 $foundTitle = preg_replace('/^(Chapter\s+\d+\s*[:\-—|]\s*)(Chapter\s+\d+\s*[:\-—|])/i', '$2', $foundTitle);
                 $foundTitle = trim($foundTitle);
             }
+            // Score the node based on its text length and the number of paragraphs.
             $text = trim($node->textContent);
             $pCount = $xpath->query('.//p', $node)->length;
             $score = mb_strlen($text) + $pCount * 500;
@@ -332,8 +401,10 @@ function fetch_chapter_content(string $url, float $throttle = 1.0): array {
                 $bestHtml = inner_html($node);
             }
         }
+        // If a good candidate is found, break early.
         if ($bestScore > 0) break;
     }
+    // Fallback to using the whole body if no good candidate was found.
     if ($bestScore === 0) {
         $body = $xpath->query('//body')->item(0);
         if ($body) {
@@ -348,7 +419,13 @@ function fetch_chapter_content(string $url, float $throttle = 1.0): array {
 /* --------------------------- Novel page parsing --------------------------- */
 
 /**
- * Extract embedded chapters from main page (if any).
+ * Some novels have all chapters embedded in the main page. This function checks for
+ * and extracts chapters from such a structure.
+ *
+ * @param string $html The HTML content of the novel's main page.
+ * @param string $baseUrl The base URL for resolving relative links.
+ * @return array A list of chapter arrays, each containing 'name', 'url', and 'content'.
+ *               Returns an empty array if no embedded chapters are found.
  */
 function extract_embedded_chapters(string $html, string $baseUrl): array {
     [$doc, $xpath] = load_dom($html);
@@ -370,7 +447,16 @@ function extract_embedded_chapters(string $html, string $baseUrl): array {
 }
 
 /**
- * Parse novel main page, returning metadata + chapter list (name,url).
+ * Parses the main novel page to extract metadata (title, author, summary) and the
+ * list of chapters. It employs a primary AJAX-based strategy and a fallback static
+ * scraping method to find the chapter list.
+ *
+ * @param string $url The URL of the novel's main page.
+ * @param float $throttle The delay to use between HTTP requests.
+ * @return array An associative array containing the novel's metadata and a 'chapters' array.
+ *               The 'chapters' array contains associative arrays with 'name' and 'url'.
+ * @throws RuntimeException If the initial HTTP request for the novel page fails.
+ * @throws Exception If the AJAX chapter list request fails.
  */
 function parse_novel_page(string $url, float $throttle = 1.0): array {
     eprint("Fetching novel page: $url");
@@ -386,6 +472,7 @@ function parse_novel_page(string $url, float $throttle = 1.0): array {
         'genre' => '',
         'chapters' => []
     ];
+    // Extract metadata from various common locations.
     $img = $xpath->query("//div[contains(@class,'book')]//img")->item(0);
     if ($img) {
         $novel['title'] = trim($img->getAttribute('alt') ?: '');
@@ -409,6 +496,7 @@ function parse_novel_page(string $url, float $throttle = 1.0): array {
         if (str_contains($label, 'Genre')) $novel['genre'] = $cleanValue;
     }
 
+    // Handle the case where chapters are embedded directly in the main page.
     $embedded = extract_embedded_chapters($html, $url);
     if (!empty($embedded)) {
         eprint("Using embedded chapters (" . count($embedded) . ")");
@@ -416,6 +504,7 @@ function parse_novel_page(string $url, float $throttle = 1.0): array {
         return $novel;
     }
 
+    // Primary strategy: Fetch chapters via AJAX request.
     $rating = $xpath->query("//*[@id='rating']")->item(0);
     $novelId = $rating ? $rating->getAttribute('data-novel-id') : null;
     if ($novelId) {
@@ -429,7 +518,7 @@ function parse_novel_page(string $url, float $throttle = 1.0): array {
                 $span = $aXpath->query(".//span", $li)->item(0);
                 if (!$a) continue;
                 $href = $a->getAttribute('href');
-                if (!preg_match('#^https?://#i', $href)) $href = rtrim(BASE_URL, '/') . '/' . ltrim($href, '/');
+                $href = url_join(BASE_URL, $href);
                 $name = $span ? trim($span->textContent) : trim($a->textContent);
                 $novel['chapters'][] = ['name' => $name, 'url' => $href];
             }
@@ -438,6 +527,7 @@ function parse_novel_page(string $url, float $throttle = 1.0): array {
         }
     }
 
+    // Fallback strategy: Scrape chapter links directly from the page.
     if (empty($novel['chapters'])) {
         eprint("Scraping chapter links from page...");
         $selectors = [
@@ -451,7 +541,7 @@ function parse_novel_page(string $url, float $throttle = 1.0): array {
                 $href = trim($a->getAttribute('href'));
                 $text = trim($a->textContent);
                 if (!$href || !$text) continue;
-                if (!preg_match('#^https?://#i', $href)) $href = rtrim(BASE_URL, '/') . '/' . ltrim($href, '/');
+                $href = url_join(BASE_URL, $href);
                 if (isset($seen[$href])) continue;
                 $seen[$href] = true;
                 $novel['chapters'][] = ['name' => $text, 'url' => $href];
@@ -466,30 +556,43 @@ function parse_novel_page(string $url, float $throttle = 1.0): array {
 /* --------------------------- HTML builder --------------------------- */
 
 /**
- * Build a complete A5 HTML document for the provided $novel array.
- * $novel['chapters'] should be an array of ['name','content'] entries.
+ * Builds a complete A5-optimized HTML document from the collected novel data.
+ * This function assembles the header, metadata, and all chapter content into a
+ * single, self-contained HTML file with embedded CSS.
+ *
+ * @param array $novel An associative array containing the novel's `title`, `author`,
+ *                     `summary`, and a list of `chapters`. Each chapter in the list
+ *                     should be an array with `name` and `content`.
+ * @return string The complete HTML document as a string, ready to be saved to a file.
  */
 function build_a5_html(array $novel): string {
     $title = htmlspecialchars($novel['title'] ?: 'Untitled Novel', ENT_QUOTES | ENT_HTML5);
     $author = htmlspecialchars($novel['author'] ?? '', ENT_QUOTES | ENT_HTML5);
     $summary = nl2br(htmlspecialchars($novel['summary'] ?? '', ENT_QUOTES | ENT_HTML5));
+    // Start building the HTML document structure.
     $html = "<!doctype html>\n<html lang='en'>\n<head>\n<meta charset='utf-8'>\n<meta name='viewport' content='width=device-width,initial-scale=1'>\n<title>{$title}</title>\n<style>" . A5_CSS . "</style>\n</head>\n<body>\n<div class='book'>\n<header>\n  <h1>{$title}</h1>\n  <h2 class='author'>{$author}</h2>\n  <div class='summary'>{$summary}</div>\n  <hr class='sep'>\n</header>\n";
+    // Iterate through chapters and append them as articles.
     foreach ($novel['chapters'] as $i => $ch) {
         $displayTitle = trim($ch['name'] ?? '');
         if ($displayTitle === '') $displayTitle = 'Chapter ' . ($i + 1);
         $safeTitle = htmlspecialchars($displayTitle, ENT_QUOTES | ENT_HTML5);
         $content = $ch['content'] ?? '<p><em>(no content)</em></p>';
+        // Remove common navigation links that might have been missed during cleaning.
         $content = preg_replace('#<a[^>]*>(?:Prev|Next|Comments?|Report|Home|Novel|Table of Contents?)</a>#is', '', $content);
         $html .= "<article class='chapter' id='ch-" . ($i + 1) . "'>\n";
         $html .= "  <h3 class='chapter-title'>{$safeTitle}</h3>\n";
         $html .= "  <div class='chapter-content'>{$content}</div>\n</article>\n<hr class='sep'>\n";
     }
+    // Add a footer and close the document.
     $html .= "<footer>Archived with NovelBin Scraper • " . date('Y-m-d') . "</footer>\n</div>\n</body>\n</html>\n";
     return $html;
 }
 
 /* --------------------------- CLI / MAIN --------------------------- */
 
+/**
+ * Displays the help message and exits.
+ */
 function show_help(): void {
     $name = basename(__FILE__);
     fwrite(STDOUT, <<<TXT
