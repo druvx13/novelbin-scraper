@@ -1,0 +1,1494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Novel Scraper — Client-side Web Novel Downloader</title>
+<style>
+/* ─── Design tokens ─────────────────────────────────────────────────── */
+:root {
+  --bg:          #0f172a;
+  --surface:     #1e293b;
+  --surface2:    #263348;
+  --border:      #334155;
+  --text:        #e2e8f0;
+  --text-dim:    #94a3b8;
+  --accent:      #6366f1;
+  --accent-h:    #818cf8;
+  --accent-bg:   rgba(99,102,241,.15);
+  --success:     #10b981;
+  --success-bg:  rgba(16,185,129,.12);
+  --warn:        #f59e0b;
+  --warn-bg:     rgba(245,158,11,.12);
+  --error:       #ef4444;
+  --error-bg:    rgba(239,68,68,.12);
+  --info:        #38bdf8;
+  --radius:      10px;
+  --shadow:      0 4px 24px rgba(0,0,0,.4);
+  --font:        -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --mono:        'SF Mono', 'Fira Code', Consolas, monospace;
+  --transition:  .18s ease;
+}
+[data-theme="light"] {
+  --bg:          #f1f5f9;
+  --surface:     #ffffff;
+  --surface2:    #f8fafc;
+  --border:      #cbd5e1;
+  --text:        #1e293b;
+  --text-dim:    #64748b;
+  --accent:      #4f46e5;
+  --accent-h:    #6366f1;
+  --accent-bg:   rgba(79,70,229,.08);
+  --shadow:      0 4px 24px rgba(0,0,0,.08);
+}
+
+/* ─── Reset ─────────────────────────────────────────────────────────── */
+*,*::before,*::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; scroll-behavior: smooth; }
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  line-height: 1.6;
+  transition: background var(--transition), color var(--transition);
+}
+a { color: var(--accent-h); text-decoration: none; }
+a:hover { text-decoration: underline; }
+button { cursor: pointer; font-family: var(--font); }
+input, select, textarea { font-family: var(--font); }
+
+/* ─── Layout ─────────────────────────────────────────────────────────── */
+.app-header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 1rem 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  backdrop-filter: blur(8px);
+}
+.app-header .logo {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+.app-header .title-block { flex: 1; min-width: 0; }
+.app-header h1 {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.app-header .subtitle {
+  font-size: .75rem;
+  color: var(--text-dim);
+}
+.header-actions { display: flex; gap: .5rem; align-items: center; flex-shrink: 0; }
+
+.main { max-width: 860px; margin: 0 auto; padding: 1.5rem 1rem 4rem; }
+
+/* ─── Cards ──────────────────────────────────────────────────────────── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+  box-shadow: var(--shadow);
+}
+.card-title {
+  font-size: .875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--text-dim);
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+.card-title .badge {
+  font-size: .65rem;
+  background: var(--accent-bg);
+  color: var(--accent-h);
+  padding: .15rem .45rem;
+  border-radius: 999px;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
+}
+
+/* ─── Form elements ──────────────────────────────────────────────────── */
+.field { margin-bottom: 1rem; }
+.field:last-child { margin-bottom: 0; }
+label {
+  display: block;
+  font-size: .8125rem;
+  font-weight: 500;
+  color: var(--text-dim);
+  margin-bottom: .35rem;
+}
+.input, .select {
+  width: 100%;
+  padding: .6rem .875rem;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--text);
+  font-size: .9375rem;
+  outline: none;
+  transition: border-color var(--transition), box-shadow var(--transition);
+  -webkit-appearance: none;
+  appearance: none;
+}
+.input:focus, .select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+.input::placeholder { color: var(--text-dim); opacity: .65; }
+.select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2394a3b8' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right .75rem center;
+  padding-right: 2.25rem;
+  cursor: pointer;
+}
+.select option { background: var(--surface); }
+
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: .75rem; }
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  cursor: pointer;
+  font-size: .875rem;
+  color: var(--text);
+  user-select: none;
+}
+.checkbox-row input[type=checkbox] {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--accent);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* ─── Buttons ────────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  padding: .6rem 1.25rem;
+  border-radius: 7px;
+  font-size: .9375rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+  transition: background var(--transition), transform var(--transition), box-shadow var(--transition);
+  text-decoration: none;
+  line-height: 1;
+}
+.btn:active { transform: scale(.97); }
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.btn-primary:hover { background: var(--accent-h); }
+.btn-secondary {
+  background: transparent;
+  color: var(--text);
+  border-color: var(--border);
+}
+.btn-secondary:hover { background: var(--surface2); }
+.btn-danger {
+  background: var(--error-bg);
+  color: var(--error);
+  border-color: transparent;
+}
+.btn-danger:hover { background: rgba(239,68,68,.25); }
+.btn-success {
+  background: var(--success-bg);
+  color: var(--success);
+  border-color: transparent;
+}
+.btn-success:hover { background: rgba(16,185,129,.25); }
+.btn-sm { padding: .4rem .85rem; font-size: .8125rem; }
+.btn-icon {
+  padding: .5rem;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 7px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.btn-icon:hover { background: var(--surface2); color: var(--text); }
+.btn:disabled, .btn[disabled] {
+  opacity: .45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+.btn-row {
+  display: flex;
+  gap: .625rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* ─── Detected site badge ─────────────────────────────────────────────── */
+.site-detect {
+  display: none;
+  align-items: center;
+  gap: .5rem;
+  font-size: .8125rem;
+  padding: .4rem .75rem;
+  border-radius: 7px;
+  background: var(--accent-bg);
+  color: var(--accent-h);
+  border: 1px solid rgba(99,102,241,.3);
+  margin-top: .5rem;
+}
+.site-detect.visible { display: flex; }
+.site-detect .dot {
+  width: .5rem; height: .5rem; border-radius: 50%;
+  background: var(--success); flex-shrink: 0;
+}
+
+/* ─── Progress ───────────────────────────────────────────────────────── */
+#progress-section { display: none; }
+#progress-section.visible { display: block; }
+.progress-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: .75rem; }
+.progress-label { font-size: .875rem; color: var(--text-dim); }
+.progress-pct { font-size: .875rem; font-weight: 600; color: var(--text); }
+.progress-bar-wrap {
+  background: var(--surface2);
+  border-radius: 999px;
+  height: 8px;
+  overflow: hidden;
+  margin-bottom: .75rem;
+  border: 1px solid var(--border);
+}
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-h));
+  border-radius: 999px;
+  transition: width .3s ease;
+  width: 0%;
+}
+
+/* ─── Log ────────────────────────────────────────────────────────────── */
+.log-wrap {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: .75rem;
+  height: 200px;
+  overflow-y: auto;
+  font-family: var(--mono);
+  font-size: .78125rem;
+  line-height: 1.55;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.log-wrap::-webkit-scrollbar { width: 5px; }
+.log-wrap::-webkit-scrollbar-track { background: transparent; }
+.log-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+.log-line { padding: .05rem 0; word-break: break-all; }
+.log-line.info  { color: var(--text-dim); }
+.log-line.ok    { color: var(--success); }
+.log-line.warn  { color: var(--warn); }
+.log-line.error { color: var(--error); }
+.log-line.step  { color: var(--info); }
+.log-empty { color: var(--text-dim); font-style: italic; }
+
+/* ─── Downloads ──────────────────────────────────────────────────────── */
+#downloads-section { display: none; }
+#downloads-section.visible { display: block; }
+.dl-list { display: flex; flex-direction: column; gap: .5rem; }
+.dl-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  padding: .7rem 1rem;
+  background: var(--success-bg);
+  border: 1px solid rgba(16,185,129,.2);
+  border-radius: 7px;
+}
+.dl-name {
+  font-size: .875rem;
+  font-weight: 500;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+.dl-size { font-size: .75rem; color: var(--text-dim); flex-shrink: 0; }
+
+/* ─── Collapsible advanced ───────────────────────────────────────────── */
+details { border-top: 1px solid var(--border); margin-top: 1rem; padding-top: 1rem; }
+details summary {
+  cursor: pointer;
+  font-size: .8125rem;
+  color: var(--text-dim);
+  font-weight: 500;
+  user-select: none;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+}
+details summary::-webkit-details-marker { display: none; }
+details summary::before {
+  content: '▶';
+  font-size: .6rem;
+  transition: transform var(--transition);
+  flex-shrink: 0;
+}
+details[open] summary::before { transform: rotate(90deg); }
+details .detail-body { margin-top: 1rem; }
+
+/* ─── Info banner ────────────────────────────────────────────────────── */
+.banner {
+  display: flex;
+  align-items: flex-start;
+  gap: .65rem;
+  padding: .75rem 1rem;
+  border-radius: 7px;
+  font-size: .8125rem;
+  line-height: 1.5;
+  margin-bottom: 1.25rem;
+}
+.banner.info { background: rgba(56,189,248,.1); border: 1px solid rgba(56,189,248,.25); color: var(--text); }
+.banner.warn { background: var(--warn-bg); border: 1px solid rgba(245,158,11,.3); color: var(--text); }
+.banner-icon { font-size: 1rem; flex-shrink: 0; margin-top: .05rem; }
+
+/* ─── Footer ─────────────────────────────────────────────────────────── */
+.app-footer {
+  text-align: center;
+  font-size: .75rem;
+  color: var(--text-dim);
+  padding: 1.5rem 1rem;
+  border-top: 1px solid var(--border);
+}
+
+/* ─── Animations ──────────────────────────────────────────────────────── */
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner {
+  display: inline-block;
+  width: 1em; height: 1em;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+@keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+.fade-in { animation: fadeIn .22s ease both; }
+
+/* ─── Responsive ──────────────────────────────────────────────────────── */
+@media (max-width: 600px) {
+  .app-header { padding: .75rem 1rem; }
+  .app-header h1 { font-size: 1rem; }
+  .main { padding: 1rem .75rem 3rem; }
+  .card { padding: 1rem; }
+  .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  .btn { padding: .55rem 1rem; font-size: .875rem; }
+  .btn-row { flex-direction: column; }
+  .btn-row .btn { width: 100%; justify-content: center; }
+  .dl-item { flex-direction: column; align-items: flex-start; gap: .4rem; }
+  .dl-item .btn { width: 100%; justify-content: center; }
+}
+@media (min-width: 601px) and (max-width: 860px) {
+  .grid-3 { grid-template-columns: 1fr 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- ── Header ──────────────────────────────────────────────────────────── -->
+<header class="app-header">
+  <span class="logo" aria-hidden="true">📚</span>
+  <div class="title-block">
+    <h1>Novel Scraper</h1>
+    <div class="subtitle">Client-side web novel downloader — NovelBin · FanMTL · NovelHall</div>
+  </div>
+  <div class="header-actions">
+    <button class="btn-icon" id="theme-toggle" title="Toggle light/dark mode" aria-label="Toggle theme">🌙</button>
+  </div>
+</header>
+
+<!-- ── Main ────────────────────────────────────────────────────────────── -->
+<main class="main">
+
+  <!-- CORS notice -->
+  <div class="banner info">
+    <span class="banner-icon">ℹ️</span>
+    <div>
+      This scraper runs entirely in your browser via a <strong>CORS proxy</strong>.
+      It replicates the PHP scraper's pipeline: fetches metadata, builds the chapter list,
+      downloads each chapter, cleans the content, and produces A5-optimised HTML files
+      ready for download. Choose your proxy below; <em>corsproxy.io</em> is the default.
+    </div>
+  </div>
+
+  <!-- ── Form card ─────────────────────────────────────────────────────── -->
+  <section class="card" id="form-card">
+    <div class="card-title">⚙️ Scraper Settings</div>
+
+    <div class="field">
+      <label for="url-input">Novel URL <span style="color:var(--error)">*</span></label>
+      <input id="url-input" class="input" type="url"
+        placeholder="https://novelbin.com/b/my-novel  or  fanmtl.com/...  or  novelhall.com/..."
+        autocomplete="off" spellcheck="false">
+      <div class="site-detect" id="site-detect">
+        <span class="dot"></span>
+        <span id="site-detect-text">Detected: …</span>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="field">
+        <label for="start-input">Start chapter</label>
+        <input id="start-input" class="input" type="number" min="1" value="1" placeholder="1">
+      </div>
+      <div class="field">
+        <label for="end-input">End chapter <span style="color:var(--text-dim);font-size:.75rem">(blank = all)</span></label>
+        <input id="end-input" class="input" type="number" min="1" placeholder="last">
+      </div>
+    </div>
+
+    <div class="grid-3">
+      <div class="field">
+        <label for="group-input">Chapters per file</label>
+        <input id="group-input" class="input" type="number" min="1" value="100" placeholder="100">
+      </div>
+      <div class="field">
+        <label for="throttle-input">Throttle (seconds)</label>
+        <input id="throttle-input" class="input" type="number" min="0.5" step="0.5" value="1.5" placeholder="1.5">
+      </div>
+      <div class="field">
+        <label for="out-input">Output name <span style="color:var(--text-dim);font-size:.75rem">(optional)</span></label>
+        <input id="out-input" class="input" type="text" placeholder="Auto from title">
+      </div>
+    </div>
+
+    <div class="field">
+      <label class="checkbox-row">
+        <input type="checkbox" id="preserve-cb">
+        Preserve original chapter titles (don't renumber as "Chapter N")
+      </label>
+    </div>
+
+    <!-- Advanced -->
+    <details id="advanced-details">
+      <summary>Advanced / Proxy settings</summary>
+      <div class="detail-body">
+        <div class="grid-2">
+          <div class="field">
+            <label for="proxy-select">CORS Proxy</label>
+            <select id="proxy-select" class="select">
+              <option value="corsproxy">corsproxy.io (recommended)</option>
+              <option value="allorigins">allorigins.win</option>
+              <option value="custom">Custom proxy URL…</option>
+            </select>
+          </div>
+          <div class="field" id="custom-proxy-field" style="display:none">
+            <label for="custom-proxy-input">Custom proxy prefix</label>
+            <input id="custom-proxy-input" class="input" type="url"
+              placeholder="https://my-proxy.example.com/?url=">
+          </div>
+        </div>
+        <div class="banner warn" style="margin-top:.75rem;margin-bottom:0">
+          <span class="banner-icon">⚠️</span>
+          <div>CORS proxies are third-party services. They see the plain text of each page
+          fetched (no login credentials are ever sent). If a proxy is unreliable, switch to
+          another or host your own (e.g. <code>corsproxy</code> npm package).</div>
+        </div>
+      </div>
+    </details>
+
+    <div class="btn-row" style="margin-top:1.25rem">
+      <button class="btn btn-primary" id="start-btn">
+        <span id="start-btn-icon">▶</span>
+        <span id="start-btn-text">Fetch &amp; Download</span>
+      </button>
+      <button class="btn btn-danger" id="cancel-btn" style="display:none">
+        ✕ Cancel
+      </button>
+    </div>
+  </section>
+
+  <!-- ── Progress card ─────────────────────────────────────────────────── -->
+  <section class="card fade-in" id="progress-section">
+    <div class="card-title">📊 Progress</div>
+    <div class="progress-header">
+      <span class="progress-label" id="progress-label">Initialising…</span>
+      <span class="progress-pct" id="progress-pct">0%</span>
+    </div>
+    <div class="progress-bar-wrap">
+      <div class="progress-bar-fill" id="progress-bar"></div>
+    </div>
+    <div class="log-wrap" id="log-wrap">
+      <div class="log-empty">Log will appear here…</div>
+    </div>
+  </section>
+
+  <!-- ── Downloads card ────────────────────────────────────────────────── -->
+  <section class="card fade-in" id="downloads-section">
+    <div class="card-title">
+      ✅ Downloads
+      <span class="badge" id="dl-count-badge">0 files</span>
+    </div>
+    <div class="dl-list" id="dl-list"></div>
+  </section>
+
+</main>
+
+<footer class="app-footer">
+  Novel Scraper — client-side edition &nbsp;|&nbsp;
+  <a href="https://github.com/druvx13/novelbin-scraper" target="_blank" rel="noopener noreferrer">GitHub</a>
+  &nbsp;|&nbsp; FFP License
+</footer>
+
+<!-- ── Scripts ──────────────────────────────────────────────────────────── -->
+<script>
+'use strict';
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CONFIG
+   ═══════════════════════════════════════════════════════════════════════════ */
+const SUPPORTED_HOSTS = {
+  novelbin: [
+    'novelbin.org','www.novelbin.org',
+    'novelbin.com','www.novelbin.com',
+    'thenovelbin.org','www.thenovelbin.org',
+    'novlove.com','www.novlove.com',
+  ],
+  fanmtl:   ['fanmtl.com','www.fanmtl.com'],
+  novelhall:['novelhall.com','www.novelhall.com'],
+};
+
+const PROXY_PREFIXES = {
+  corsproxy:  url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+  allorigins: url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+};
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   STATE
+   ═══════════════════════════════════════════════════════════════════════════ */
+let abortController = null;
+let isRunning = false;
+const generatedFiles = [];
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   UI UTILITIES
+   ═══════════════════════════════════════════════════════════════════════════ */
+const $ = id => document.getElementById(id);
+
+// Log-type prefix symbols — defined once outside log() to avoid per-call object creation
+const LOG_PREFIXES = { info:'  ', ok:'✓ ', warn:'⚠ ', error:'✗ ', step:'» ' };
+
+function log(msg, type = 'info') {
+  const wrap = $('log-wrap');
+  const empty = wrap.querySelector('.log-empty');
+  if (empty) empty.remove();
+  const el = document.createElement('div');
+  el.className = `log-line ${type}`;
+  const ts = new Date().toTimeString().slice(0,8);
+  const prefix = LOG_PREFIXES[type] || '  ';
+  el.textContent = `[${ts}] ${prefix}${msg}`;
+  wrap.appendChild(el);
+  wrap.scrollTop = wrap.scrollHeight;
+}
+
+function setProgress(current, total, label = '') {
+  const pct = total > 0 ? Math.round((current / total) * 100) : 0;
+  $('progress-bar').style.width = pct + '%';
+  $('progress-pct').textContent = pct + '%';
+  $('progress-label').textContent = label || (total > 0 ? `Chapter ${current} of ${total}` : 'Working…');
+}
+
+function showProgress() {
+  $('progress-section').classList.add('visible');
+}
+
+function showDownloads() {
+  $('downloads-section').classList.add('visible');
+}
+
+function addDownload(filename, content) {
+  const blob = new Blob([content], { type: 'text/html;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const sizeKb = (blob.size / 1024).toFixed(0);
+
+  generatedFiles.push({ filename, url, size: sizeKb });
+
+  const item = document.createElement('div');
+  item.className = 'dl-item fade-in';
+  item.innerHTML = `
+    <span class="dl-name" title="${esc(filename)}">📄 ${esc(filename)}</span>
+    <span class="dl-size">${sizeKb} KB</span>
+    <a class="btn btn-success btn-sm" href="${url}" download="${esc(filename)}">⬇ Download</a>`;
+  $('dl-list').appendChild(item);
+
+  const badge = $('dl-count-badge');
+  badge.textContent = generatedFiles.length + (generatedFiles.length === 1 ? ' file' : ' files');
+  showDownloads();
+}
+
+function setRunning(running) {
+  isRunning = running;
+  $('start-btn').disabled = running;
+  $('cancel-btn').style.display = running ? '' : 'none';
+  $('start-btn-icon').innerHTML = running ? '<span class="spinner"></span>' : '▶';
+  $('start-btn-text').textContent = running ? 'Scraping…' : 'Fetch & Download';
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Max filename length: 240 chars keeps paths well under the 255-byte limit on
+// most filesystems while still leaving room for the directory prefix.
+const MAX_FILENAME_LEN = 240;
+// Scoring weight for each <p> element found in a content candidate node.
+// Paragraphs are a strong signal of prose content vs. navigation noise.
+const PARAGRAPH_WEIGHT = 400;
+// Milliseconds to wait between TOC page fetches to avoid rate-limiting.
+const TOC_FETCH_DELAY_MS = 500;
+// Maximum chapter-name characters shown in the progress label.
+const MAX_LABEL_NAME_LEN = 50;
+function urlJoin(base, rel) {
+  if (!rel) return base;
+  if (/^https?:\/\//i.test(rel)) return rel;
+  if (rel.startsWith('//')) {
+    const scheme = base.match(/^(https?)/i)?.[1] || 'https';
+    return scheme + ':' + rel;
+  }
+  try {
+    return new URL(rel, base).href;
+  } catch {
+    return rel;
+  }
+}
+
+function sanitizeFilename(name) {
+  return (name || 'novel')
+    .replace(/[<>:"\/\\|?*\x00-\x1f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, MAX_FILENAME_LEN) || 'novel';
+}
+
+function siteBase(url) {
+  try {
+    const u = new URL(url);
+    return u.origin;
+  } catch { return ''; }
+}
+
+function sleep(ms) {
+  return new Promise(res => setTimeout(res, ms));
+}
+
+function extractChapterNumber(title) {
+  let m;
+  m = title.match(/(?:Chapter|Chap|Ch)[^\d]{0,4}(\d+)/i);
+  if (m) return parseInt(m[1], 10);
+  m = title.match(/^\s*(\d{1,4})[\.\)\-\s:]/);
+  if (m) return parseInt(m[1], 10);
+  m = title.match(/\b([1-9][0-9]{0,3})\b/);
+  if (m) { const n = parseInt(m[1],10); if (n <= 10000) return n; }
+  return null;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CORE UTILITIES
+   ═══════════════════════════════════════════════════════════════════════════ */
+function getProxyFn() {
+  const sel = $('proxy-select').value;
+  if (sel === 'custom') {
+    const prefix = ($('custom-proxy-input').value || '').trim();
+    if (!prefix) throw new Error('Custom proxy URL is empty.');
+    return url => prefix + encodeURIComponent(url);
+  }
+  return PROXY_PREFIXES[sel] || PROXY_PREFIXES.corsproxy;
+}
+
+async function proxyFetch(url, proxyFn, signal) {
+  const proxyUrl = proxyFn(url);
+  const resp = await fetch(proxyUrl, { signal });
+  if (!resp.ok) throw new Error(`HTTP ${resp.status} for ${url}`);
+  return resp.text();
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CORS PROXY FETCH
+   ═══════════════════════════════════════════════════════════════════════════ */
+const PARSER = new DOMParser();
+
+function parseHtml(html) {
+  return PARSER.parseFromString(html, 'text/html');
+}
+
+/**
+ * Clean a content HTML fragment: strip scripts/styles/nav/ads, keep only
+ * semantic content attributes (href, src, alt, title).
+ */
+function cleanFragmentHtml(html, baseUrl) {
+  const doc = parseHtml(`<div id="__wrap__">${html}</div>`);
+  const root = doc.getElementById('__wrap__') || doc.body;
+
+  // Remove noisy elements
+  const removeSelectors = [
+    'script','style','noscript','iframe','object','embed',
+    '[class*="breadcrumb"]','[class*="navbar"]','[class*="btn-"]',
+    '[class*=" btn"]','.btn','[class*=" nav"]','.nav',
+    '[class*="share"]','[class*="report"]','[class*="rating"]',
+    '[class*="comment"]','[class*="ads"]','[id*="ads"]',
+    'aside','footer','header','nav','form',
+  ];
+  removeSelectors.forEach(sel => {
+    try { root.querySelectorAll(sel).forEach(n => n.remove()); } catch {}
+  });
+
+  // Resolve relative URLs and strip non-safe attributes
+  root.querySelectorAll('*').forEach(el => {
+    const tag = el.tagName.toLowerCase();
+    const keep = {};
+    if (el.hasAttribute('href')) {
+      const v = el.getAttribute('href');
+      if (v && !/^(javascript)/i.test(v)) keep.href = urlJoin(baseUrl, v);
+    }
+    if (el.hasAttribute('src')) {
+      const v = el.getAttribute('src');
+      if (v && !/^(javascript)/i.test(v)) keep.src = urlJoin(baseUrl, v);
+    }
+    if (el.hasAttribute('alt'))   keep.alt   = el.getAttribute('alt');
+    if (el.hasAttribute('title')) keep.title = el.getAttribute('title');
+
+    // Remove all attrs then put back safe ones
+    while (el.attributes.length > 0) el.removeAttribute(el.attributes[0].name);
+    Object.entries(keep).forEach(([k,v]) => el.setAttribute(k, v));
+  });
+
+  // Remove navigation-style links by text
+  const navTexts = /^(prev|next|previous|comments?|report|home|novel|table of contents?|toc|chapters?)$/i;
+  root.querySelectorAll('a').forEach(a => {
+    if (navTexts.test((a.textContent || '').trim())) a.remove();
+  });
+
+  return root.innerHTML;
+}
+
+/**
+ * Score a DOM element as a chapter content candidate.
+ * Higher text length + more <p> elements = better score.
+ */
+function scoreNode(el) {
+  const text = (el.textContent || '').trim();
+  if (text.length < 60) return 0;
+  const pCount = el.querySelectorAll('p').length;
+  return text.length + pCount * PARAGRAPH_WEIGHT;
+}
+
+/**
+ * Pick best content element from a list of CSS selectors.
+ * Returns the element with the highest score.
+ */
+function pickBestContent(doc, selectors) {
+  let best = null, bestScore = 0;
+  for (const sel of selectors) {
+    let nodes;
+    try { nodes = doc.querySelectorAll(sel); } catch { continue; }
+    for (const node of nodes) {
+      const score = scoreNode(node);
+      if (score > bestScore) { bestScore = score; best = node; }
+    }
+    if (best) break;
+  }
+  return best;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DOM PARSING UTILITIES
+   ═══════════════════════════════════════════════════════════════════════════ */
+const NovelBin = {
+
+  async parseNovelPage(url, proxyFn, signal) {
+    const html = await proxyFetch(url, proxyFn, signal);
+    const doc = parseHtml(html);
+    const base = siteBase(url);
+
+    const novel = { url, title:'', author:'', summary:'', cover:'', chapters:[] };
+
+    // Title
+    const img = doc.querySelector('.book img, .novel-info img');
+    if (img) {
+      novel.title = (img.getAttribute('alt') || '').trim();
+      novel.cover  = img.getAttribute('src') || '';
+    }
+    if (!novel.title) {
+      const h1 = doc.querySelector('h1.novel-title, h1');
+      if (h1) novel.title = h1.textContent.trim();
+    }
+
+    // Metadata from info list
+    doc.querySelectorAll('ul.info li, .novel-info li').forEach(li => {
+      const label = (li.querySelector('h3')?.textContent || li.querySelector('span')?.textContent || '').toLowerCase();
+      const text  = li.textContent.replace(/\s+/g,' ').trim();
+      if (/author/i.test(label)) {
+        novel.author = text.replace(/author[:\s]*/i,'').trim();
+      }
+    });
+
+    // Summary
+    const summaryEl = doc.querySelector('.desc-text, .novel-summary, [class*="summary"]');
+    if (summaryEl) novel.summary = summaryEl.textContent.trim();
+
+    // Chapter list — AJAX strategy
+    const ratingEl = doc.querySelector('#rating, [data-novel-id]');
+    const novelId = ratingEl?.getAttribute('data-novel-id') || ratingEl?.getAttribute('data-id');
+    if (novelId) {
+      log(`Fetching chapter list via AJAX (novelId: ${novelId})`, 'step');
+      try {
+        const ajaxUrl = `${base}/ajax/chapter-archive?novelId=${encodeURIComponent(novelId)}`;
+        const ajaxHtml = await proxyFetch(ajaxUrl, proxyFn, signal);
+        const aDoc = parseHtml(ajaxHtml);
+        aDoc.querySelectorAll('ul.list-chapter li, ul li').forEach(li => {
+          const a    = li.querySelector('a');
+          const span = li.querySelector('span');
+          if (!a) return;
+          const href = urlJoin(base, a.getAttribute('href') || '');
+          const name = (span?.textContent || a.textContent || '').trim();
+          if (href && name) novel.chapters.push({ name, url: href });
+        });
+        if (novel.chapters.length > 0) log(`Found ${novel.chapters.length} chapters via AJAX`, 'ok');
+      } catch(e) {
+        log(`AJAX fallback failed: ${e.message}`, 'warn');
+      }
+    }
+
+    // Fallback: static link scraping
+    if (novel.chapters.length === 0) {
+      log('Scraping chapter links from page…', 'step');
+      const seen = new Set();
+      const selectors = [
+        '.list-chapter a', 'ul.chapter-list a', 'a[href*="/chapter"]',
+      ];
+      for (const sel of selectors) {
+        doc.querySelectorAll(sel).forEach(a => {
+          const href = urlJoin(base, a.getAttribute('href') || '');
+          const name = a.textContent.trim();
+          if (!href || !name || seen.has(href)) return;
+          seen.add(href);
+          novel.chapters.push({ name, url: href });
+        });
+        if (novel.chapters.length > 0) break;
+      }
+    }
+
+    return novel;
+  },
+
+  async fetchChapter(url, proxyFn, signal) {
+    const html = await proxyFetch(url, proxyFn, signal);
+    const doc  = parseHtml(html);
+
+    // Remove noise
+    doc.querySelectorAll('script,style,noscript,.ads,.ad,[id*="ads"],nav,header,footer').forEach(n=>n.remove());
+
+    // Title
+    let title = '';
+    const titleEl = doc.querySelector('h2.chr-title, h1.chapter-title, .chr-text, h2.title');
+    if (titleEl) title = titleEl.textContent.trim();
+
+    // Content: score candidates
+    const contentSelectors = [
+      '#chr-content','.chr-c','#chapter-content','[id*="chapter-content"]',
+      '.chapter-content','[class*="chapter-content"]','.reading-content',
+      'article','.entry-content','main',
+    ];
+    const best = pickBestContent(doc, contentSelectors);
+    const rawHtml = best ? best.innerHTML : doc.body?.innerHTML || '';
+    const content = cleanFragmentHtml(rawHtml, url);
+
+    // Fallback title from page h1/h2
+    if (!title) {
+      const h = doc.querySelector('h1, h2');
+      if (h) title = h.textContent.trim();
+    }
+
+    return { title, content };
+  },
+};
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   FANMTL SCRAPER
+   ═══════════════════════════════════════════════════════════════════════════ */
+const FanMTL = {
+
+  /**
+   * Detect TOC page URLs from pagination links.
+   * Handles ?page=N, /page/N/ and /paged/N/ patterns.
+   */
+  getTocPageUrls(doc, baseUrl) {
+    const anchors = [];
+    doc.querySelectorAll('ul.pagination a, a.page-numbers, nav.pagination a, a.page-link, [class*="pagination"] a').forEach(a => {
+      const href = a.getAttribute('href');
+      if (href) anchors.push(urlJoin(baseUrl, href));
+    });
+
+    const pageNums = [];
+    let pattern = null;
+    for (const a of anchors) {
+      let m;
+      m = a.match(/[?&]page=(\d+)/);
+      if (m) { pageNums.push(parseInt(m[1])); pattern = { type:'query', example:a }; continue; }
+      m = a.match(/\/page\/(\d+)\/?/i);
+      if (m) { pageNums.push(parseInt(m[1])); pattern = { type:'path', kind:'page', example:a }; continue; }
+      m = a.match(/\/paged\/(\d+)\/?/i);
+      if (m) { pageNums.push(parseInt(m[1])); pattern = { type:'path', kind:'paged', example:a }; continue; }
+    }
+
+    if (pageNums.length === 0 || !pattern) return [baseUrl];
+    const maxPage = Math.max(...pageNums);
+    const urls = [];
+
+    if (pattern.type === 'query') {
+      try {
+        const u = new URL(pattern.example);
+        for (let i = 1; i <= maxPage; i++) {
+          u.searchParams.set('page', String(i));
+          urls.push(u.href);
+        }
+      } catch { return [baseUrl]; }
+    } else {
+      const { kind, example } = pattern;
+      const re = new RegExp(`/${kind}/\\d+/?$`, 'i');
+      const stripped = example.replace(re, '');
+      for (let i = 1; i <= maxPage; i++) {
+        urls.push(stripped + `/${kind}/${i}/`);
+      }
+    }
+    return urls.length > 0 ? urls : [baseUrl];
+  },
+
+  extractChaptersFromDoc(doc, baseUrl) {
+    const chapters = [];
+    const seen = new Set();
+    const selectors = [
+      'ul.chapter-list a','div.chapter-list a',
+      'div.list-chapter a','ul.list-chapter a',
+      'a.chapter-link',
+    ];
+    for (const sel of selectors) {
+      doc.querySelectorAll(sel).forEach(a => {
+        const href = urlJoin(baseUrl, a.getAttribute('href') || '');
+        let name = '';
+        const numEl = a.querySelector('[class*="chapter-no"]');
+        const titleEl = a.querySelector('[class*="chapter-title"]');
+        if (numEl && titleEl) {
+          name = `${numEl.textContent.trim()} — ${titleEl.textContent.trim()}`;
+        } else {
+          name = a.textContent.replace(/\s+/g,' ').trim();
+        }
+        if (!href || !name || seen.has(href)) return;
+        seen.add(href);
+        chapters.push({ name, url: href });
+      });
+      if (chapters.length > 0) break;
+    }
+    return chapters;
+  },
+
+  async parseNovelPage(url, proxyFn, signal, onProgress) {
+    const html = await proxyFetch(url, proxyFn, signal);
+    const doc  = parseHtml(html);
+
+    const novel = { url, title:'', author:'', summary:'', cover:'', chapters:[] };
+
+    // Metadata
+    const h1 = doc.querySelector('h1[itemprop="name"], h1.novel-title, h1');
+    if (h1) novel.title = h1.textContent.replace(/\s+/g,' ').trim();
+
+    const coverImg = doc.querySelector('figure.cover img, img.cover, img[class*="cover"]');
+    if (coverImg) {
+      novel.cover = coverImg.getAttribute('src') || '';
+      if (!novel.title) novel.title = (coverImg.getAttribute('alt') || '').trim();
+    }
+
+    const authorEl = doc.querySelector('span[itemprop="author"]');
+    if (authorEl) novel.author = authorEl.textContent.trim();
+
+    const summaryEl = doc.querySelector('[class*="summary"] [class*="content"], [class*="summary"], [class*="desc"]');
+    if (summaryEl) novel.summary = summaryEl.textContent.trim();
+
+    // TOC pages
+    const tocUrls = this.getTocPageUrls(doc, url);
+    log(`TOC pages detected: ${tocUrls.length}`, 'step');
+
+    // Chapters from first page
+    const seen = new Set();
+    const addChapters = (chs) => {
+      chs.forEach(c => {
+        if (!seen.has(c.url)) { seen.add(c.url); novel.chapters.push(c); }
+      });
+    };
+    addChapters(this.extractChaptersFromDoc(doc, url));
+
+    // Additional TOC pages
+    for (let i = 0; i < tocUrls.length; i++) {
+      const tocUrl = tocUrls[i];
+      if (tocUrl === url) continue;
+      try {
+        if (onProgress) onProgress(`Fetching TOC page ${i+1}/${tocUrls.length}…`);
+        const tocHtml = await proxyFetch(tocUrl, proxyFn, signal);
+        await sleep(TOC_FETCH_DELAY_MS);
+        const tocDoc  = parseHtml(tocHtml);
+        addChapters(this.extractChaptersFromDoc(tocDoc, tocUrl));
+      } catch(e) {
+        log(`Warning: TOC page ${tocUrl} failed: ${e.message}`, 'warn');
+      }
+    }
+
+    // Final fallback
+    if (novel.chapters.length === 0) {
+      doc.querySelectorAll('a[href*="/chapter"], a[href*="/chap"]').forEach(a => {
+        const href = urlJoin(url, a.getAttribute('href') || '');
+        const name = a.textContent.trim();
+        if (!href || !name || seen.has(href)) return;
+        seen.add(href);
+        novel.chapters.push({ name, url: href });
+      });
+    }
+
+    return novel;
+  },
+
+  async fetchChapter(url, proxyFn, signal) {
+    const html = await proxyFetch(url, proxyFn, signal);
+    const doc  = parseHtml(html);
+
+    doc.querySelectorAll('script,style,noscript,.ads,[id*="ads"]').forEach(n=>n.remove());
+
+    // Title
+    let title = '';
+    const titleEl = doc.querySelector(
+      'h2.chapter-title, strong.chapter-title, h2[class*="title"], ' +
+      'h1.chapter-title, .chapter-header h2, .single-header h1'
+    );
+    if (titleEl) title = titleEl.textContent.trim();
+
+    const contentSelectors = [
+      '#chapter-content','[id*="chapter-content"]',
+      '.chapter-content','[class*="chapter-content"]',
+      'article .entry-content','.entry-content','article','main',
+    ];
+    const best = pickBestContent(doc, contentSelectors);
+    const rawHtml = best ? best.innerHTML : doc.body?.innerHTML || '';
+    const content = cleanFragmentHtml(rawHtml, url);
+
+    if (!title) {
+      const h = doc.querySelector('h1,h2');
+      if (h) title = h.textContent.trim();
+    }
+
+    return { title, content };
+  },
+};
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   NOVELHALL SCRAPER
+   ═══════════════════════════════════════════════════════════════════════════ */
+const NovelHall = {
+
+  async parseNovelPage(url, proxyFn, signal) {
+    const html = await proxyFetch(url, proxyFn, signal);
+    const doc  = parseHtml(html);
+    const base = siteBase(url);
+
+    const novel = { url, title:'', author:'', summary:'', cover:'', chapters:[] };
+
+    // Title: div.book-info h1
+    novel.title = (doc.querySelector('div.book-info h1')?.textContent || '').trim();
+
+    // Author: meta[property="books:author"]
+    novel.author = (doc.querySelector('meta[property="books:author"]')?.getAttribute('content') || '').trim();
+
+    // Summary: div.book-info div.intro
+    novel.summary = (doc.querySelector('div.book-info div.intro, div.book-info .desc')?.textContent || '').trim();
+
+    // Cover: div.book-img img
+    novel.cover = doc.querySelector('div.book-img img')?.getAttribute('src') || '';
+
+    // Chapter list: pick div.book-catalog with most <a> elements
+    let bestCatalog = null, bestCount = 0;
+    doc.querySelectorAll('div.book-catalog, div[class*="catalog"]').forEach(div => {
+      const count = div.querySelectorAll('a').length;
+      if (count > bestCount) { bestCount = count; bestCatalog = div; }
+    });
+
+    if (bestCatalog) {
+      bestCatalog.querySelectorAll('a').forEach(a => {
+        const href = urlJoin(base, a.getAttribute('href') || '');
+        const name = a.textContent.trim();
+        if (href && name) novel.chapters.push({ name, url: href });
+      });
+    }
+
+    // Fallback
+    if (novel.chapters.length === 0) {
+      const seen = new Set();
+      doc.querySelectorAll('a[href*="/chapter"], a[href*="/read"]').forEach(a => {
+        const href = urlJoin(base, a.getAttribute('href') || '');
+        const name = a.textContent.trim();
+        if (!href || !name || seen.has(href)) return;
+        seen.add(href);
+        novel.chapters.push({ name, url: href });
+      });
+    }
+
+    return novel;
+  },
+
+  async fetchChapter(url, proxyFn, signal) {
+    const html = await proxyFetch(url, proxyFn, signal);
+    const doc  = parseHtml(html);
+
+    doc.querySelectorAll('script,style,noscript').forEach(n=>n.remove());
+
+    // Title: article div.single-header h1
+    let title = '';
+    const titleEl = doc.querySelector('article .single-header h1, div.single-header h1, article h1');
+    if (titleEl) title = titleEl.textContent.trim();
+
+    // Content: article div.entry-content
+    const contentSelectors = [
+      'article .entry-content','div.entry-content',
+      'article','#htmlContent','div[class*="chapter-content"]',
+      'div[class*="read-content"]','main',
+    ];
+    const best = pickBestContent(doc, contentSelectors);
+    const rawHtml = best ? best.innerHTML : doc.body?.innerHTML || '';
+    const content = cleanFragmentHtml(rawHtml, url);
+
+    if (!title) {
+      const h = doc.querySelector('h1,h2');
+      if (h) title = h.textContent.trim();
+    }
+
+    return { title, content };
+  },
+};
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SCRAPER ROUTER
+   ═══════════════════════════════════════════════════════════════════════════ */
+function detectScraper(url) {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    if (SUPPORTED_HOSTS.novelbin.includes(host))  return 'novelbin';
+    if (SUPPORTED_HOSTS.fanmtl.includes(host))    return 'fanmtl';
+    if (SUPPORTED_HOSTS.novelhall.includes(host)) return 'novelhall';
+  } catch {}
+  return null;
+}
+
+function getScraper(type) {
+  return { novelbin: NovelBin, fanmtl: FanMTL, novelhall: NovelHall }[type] || null;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   A5 HTML BUILDER
+   ═══════════════════════════════════════════════════════════════════════════ */
+const A5_CSS = `
+@page { size: A5; margin: 18mm; }
+html { font-size: 16px; }
+body {
+  font-family: "Libre Baskerville", "Georgia", "Times New Roman", serif;
+  color: #000; background: #fff; margin: 0; padding: 0;
+  line-height: 1.5; -webkit-print-color-adjust: exact;
+}
+.book { max-width: 148mm; margin: 0 auto; padding: 12mm; box-sizing: border-box; }
+header { text-align: center; margin-bottom: 12mm; }
+h1 { font-size: 1.875rem; margin: 0 0 0.375rem; font-weight: 700; letter-spacing: -.02em; }
+h2.author { font-size: .9375rem; margin: 0 0 .625rem; font-weight: 400; color: #222; font-style: italic; }
+.summary { font-size: .8125rem; color: #333; margin-bottom: .625rem; line-height: 1.4; }
+hr.sep { border: none; border-top: 1px solid #ccc; margin: .625rem 0; }
+.chapter { page-break-inside: avoid; margin-bottom: .75rem; }
+.chapter + .chapter { margin-top: .5rem; }
+.chapter-title { font-size: .9375rem; margin: .625rem 0 .375rem; font-weight: 600; color: #111; }
+.chapter-content { font-size: .9375rem; line-height: 1.6; text-align: justify; color: #111; hyphens: auto; }
+.chapter-content p { margin: 0 0 .625rem; text-indent: 1.25rem; }
+.chapter-content p:first-child { text-indent: 0; }
+footer { text-align: center; font-size: .75rem; color: #777; margin-top: 14mm; font-style: italic; }
+`;
+
+function buildA5Html(novel) {
+  const title   = esc(novel.title || 'Untitled Novel');
+  const author  = esc(novel.author || '');
+  // Use shared esc() for HTML entity encoding, then convert newlines to <br>
+  const summary = esc(novel.summary || '').replace(/\n/g, '<br>');
+
+  let html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${title}</title>
+<style>${A5_CSS}</style>
+</head>
+<body>
+<div class="book">
+<header>
+  <h1>${title}</h1>
+${author  ? `  <h2 class="author">${author}</h2>\n` : ''}${summary ? `  <div class="summary">${summary}</div>\n` : ''}  <hr class="sep">
+</header>
+`;
+
+  novel.chapters.forEach((ch, i) => {
+    let displayTitle = (ch.name || '').trim() || `Chapter ${i + 1}`;
+    const safeTitle = esc(displayTitle);
+    // cleanFragmentHtml already strips nav links; this pass catches anything that
+    // slipped through (e.g. content fetched before cleaning ran).
+    const content = (ch.content || '<p><em>(no content)</em></p>')
+      .replace(/<a[^>]*>(?:Prev(?:ious)?|Next|Comments?|Report|Home|Novel|Table\s+of\s+Contents?|TOC)<\/a>/gi, '');
+    html += `<article class="chapter" id="ch-${i+1}">
+  <h3 class="chapter-title">${safeTitle}</h3>
+  <div class="chapter-content">${content}</div>
+</article>
+<hr class="sep">
+`;
+  });
+
+  const today = new Date().toISOString().slice(0,10);
+  html += `<footer>Archived with Novel Scraper (client-side) • ${today}</footer>
+</div>
+</body>
+</html>
+`;
+  return html;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MAIN SCRAPE PIPELINE
+   ═══════════════════════════════════════════════════════════════════════════ */
+async function run() {
+  if (isRunning) return;
+
+  // Validate inputs
+  const urlVal = $('url-input').value.trim();
+  if (!urlVal) { alert('Please enter a novel URL.'); return; }
+
+  const scraperType = detectScraper(urlVal);
+  if (!scraperType) {
+    alert('Unsupported URL. Supported sites: NovelBin, FanMTL, NovelHall.');
+    return;
+  }
+
+  const startCh    = Math.max(1, parseInt($('start-input').value)  || 1);
+  const endChRaw   = $('end-input').value.trim();
+  const endCh      = endChRaw ? Math.max(startCh, parseInt(endChRaw)) : Infinity;
+  const groupSize  = Math.max(1, parseInt($('group-input').value)   || 100);
+  const throttleSec= Math.max(0.5, parseFloat($('throttle-input').value) || 1.5);
+  const preserveNums = $('preserve-cb').checked;
+  const outName    = $('out-input').value.trim();
+
+  let proxyFn;
+  try { proxyFn = getProxyFn(); } catch(e) { alert(e.message); return; }
+
+  // Reset UI
+  generatedFiles.length = 0;
+  $('dl-list').innerHTML = '';
+  $('dl-count-badge').textContent = '0 files';
+  $('downloads-section').classList.remove('visible');
+  $('log-wrap').innerHTML = '';
+  setProgress(0, 0, 'Initialising…');
+  showProgress();
+  setRunning(true);
+
+  abortController = new AbortController();
+  const signal = abortController.signal;
+  const scraper = getScraper(scraperType);
+
+  const scraperNames = { novelbin:'NovelBin', fanmtl:'FanMTL', novelhall:'NovelHall' };
+  log(`Scraper: ${scraperNames[scraperType]}`, 'step');
+  log(`URL: ${urlVal}`, 'info');
+  log(`Range: chapters ${startCh}–${endCh === Infinity ? 'last' : endCh}, group size ${groupSize}, throttle ${throttleSec}s`,'info');
+
+  try {
+    // ── 1. Fetch novel page ───────────────────────────────────────────────
+    setProgress(0, 0, 'Fetching novel page…');
+    log('Fetching novel metadata…', 'step');
+
+    let novel;
+    if (scraperType === 'fanmtl') {
+      novel = await scraper.parseNovelPage(urlVal, proxyFn, signal, (msg) => {
+        log(msg, 'info');
+        setProgress(0, 0, msg);
+      });
+    } else {
+      novel = await scraper.parseNovelPage(urlVal, proxyFn, signal);
+    }
+
+    if (!novel.chapters || novel.chapters.length === 0) {
+      throw new Error('No chapters found. The URL may be incorrect or the site layout has changed.');
+    }
+
+    log(`Novel: "${novel.title || '(no title)'}" by ${novel.author || '(unknown author)'}`, 'ok');
+    log(`Total chapters in TOC: ${novel.chapters.length}`, 'ok');
+
+    // ── 2. Slice to requested range ───────────────────────────────────────
+    const total = novel.chapters.length;
+    const startIdx = Math.max(0, startCh - 1);
+    const endIdx   = Math.min(total - 1, (endCh === Infinity ? total : endCh) - 1);
+
+    if (endIdx < startIdx) throw new Error(`Start chapter (${startCh}) exceeds total (${total}).`);
+
+    const selectedChapters = novel.chapters.slice(startIdx, endIdx + 1);
+    const rangeTotal = selectedChapters.length;
+    log(`Downloading chapters ${startCh}–${startIdx + rangeTotal} (${rangeTotal} total)`, 'step');
+
+    // ── 3. Fetch chapters ─────────────────────────────────────────────────
+    for (let i = 0; i < rangeTotal; i++) {
+      if (signal.aborted) throw new DOMException('Cancelled', 'AbortError');
+
+      const ch = selectedChapters[i];
+      const chNum = startCh + i;
+      const label = `Fetching chapter ${chNum}/${startCh + rangeTotal - 1}: ${ch.name.slice(0, MAX_LABEL_NAME_LEN)}`;
+      setProgress(i + 1, rangeTotal, label);
+      log(`[${chNum}] ${ch.name}`, 'info');
+
+      try {
+        await sleep(throttleSec * 1000);
+        if (signal.aborted) throw new DOMException('Cancelled', 'AbortError');
+
+        const result = await scraper.fetchChapter(ch.url, proxyFn, signal);
+
+        // Update title
+        if (result.title && result.title.length > 2) {
+          selectedChapters[i].name = result.title;
+        }
+        selectedChapters[i].content = result.content || '<p><em>(empty chapter)</em></p>';
+
+        // Sequential renumbering unless preserve-numbers is on
+        if (!preserveNums) {
+          if (!/Chapter\s+\d+/i.test(selectedChapters[i].name)) {
+            selectedChapters[i].name = `Chapter ${chNum}`;
+          }
+        }
+      } catch(e) {
+        if (e.name === 'AbortError') throw e;
+        log(`Chapter ${chNum} failed: ${e.message}`, 'warn');
+        selectedChapters[i].content = `<p><em>(failed to fetch: ${esc(e.message)})</em></p>`;
+      }
+    }
+
+    // ── 4. Build & download output files ─────────────────────────────────
+    const baseFilename = sanitizeFilename(outName || novel.title || 'novel');
+    const chunks = [];
+    for (let i = 0; i < selectedChapters.length; i += groupSize) {
+      chunks.push(selectedChapters.slice(i, i + groupSize));
+    }
+
+    log(`Building ${chunks.length} output file(s)…`, 'step');
+    setProgress(rangeTotal, rangeTotal, 'Building output files…');
+
+    chunks.forEach((group, idx) => {
+      const chStart = startCh + idx * groupSize;
+      const chEnd   = chStart + group.length - 1;
+      const filename = `${baseFilename}(${chStart}-${chEnd}).html`;
+
+      const partNovel = { ...novel, chapters: group };
+      const htmlContent = buildA5Html(partNovel);
+      addDownload(filename, htmlContent);
+      log(`Saved: ${filename}`, 'ok');
+    });
+
+    setProgress(rangeTotal, rangeTotal, '✅ Done!');
+    log('All done! Click the download buttons above to save your files.', 'ok');
+
+  } catch(e) {
+    if (e.name === 'AbortError') {
+      log('Scraping cancelled.', 'warn');
+      setProgress(0, 0, 'Cancelled');
+    } else {
+      log(`Error: ${e.message}`, 'error');
+      setProgress(0, 0, '❌ Error — see log');
+    }
+  } finally {
+    setRunning(false);
+    abortController = null;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   EVENT HANDLERS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+// Theme toggle
+(function() {
+  const saved = localStorage.getItem('theme');
+  if (saved === 'light') { document.documentElement.setAttribute('data-theme','light'); $('theme-toggle').textContent = '☀️'; }
+  $('theme-toggle').addEventListener('click', () => {
+    const current = document.documentElement.getAttribute('data-theme');
+    if (current === 'light') {
+      document.documentElement.removeAttribute('data-theme');
+      localStorage.removeItem('theme');
+      $('theme-toggle').textContent = '🌙';
+    } else {
+      document.documentElement.setAttribute('data-theme','light');
+      localStorage.setItem('theme','light');
+      $('theme-toggle').textContent = '☀️';
+    }
+  });
+})();
+
+// URL detection badge
+$('url-input').addEventListener('input', function() {
+  const v = this.value.trim();
+  const type = detectScraper(v);
+  const badge = $('site-detect');
+  if (type) {
+    const names = { novelbin:'NovelBin', fanmtl:'FanMTL', novelhall:'NovelHall' };
+    $('site-detect-text').textContent = `Detected: ${names[type]}`;
+    badge.classList.add('visible');
+  } else {
+    badge.classList.remove('visible');
+  }
+});
+
+// Start button
+$('start-btn').addEventListener('click', run);
+
+// Cancel button
+$('cancel-btn').addEventListener('click', () => {
+  if (abortController) { abortController.abort(); }
+});
+
+// Proxy selector — show/hide custom field
+$('proxy-select').addEventListener('change', function() {
+  $('custom-proxy-field').style.display = this.value === 'custom' ? '' : 'none';
+});
+
+// Enter key on URL field starts scraping
+$('url-input').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') run();
+});
+</script>
+</body>
+</html>
