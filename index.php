@@ -10,8 +10,8 @@
  *
  * @package   NovelBinScraper
  * @author    Dhruv Solanki (https://github.com/druvx13)
- * @license   MIT
- * @version   2.1
+ * @license   FFP
+ * @version   2.2
  *
  * Usage:
  *   php novelbin.php --url "<URL>" [--out "Name"] [--start N] [--end N]
