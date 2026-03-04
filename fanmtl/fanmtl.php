@@ -1,4 +1,3 @@
-#!/usr/bin/env php
 <?php
 /**
  * FanMTL Scraper — Readwn-style A5 Novel Archiver (Single-file)
@@ -8,8 +7,8 @@
  * - Outputs A5-optimized HTML files and splits into parts (default 100 chapters per file).
  *
  * Usage examples:
- *   php index.php --url "https://www.fanmtl.com/novel/..." --start 51 --verbose
- *   php index.php --url "..." --preserve-numbers
+ *   php fanmtl.php --url "https://www.fanmtl.com/novel/..." --start 51
+ *   php fanmtl.php --url "..." --preserve-numbers
  *
  * Notes:
  * - No external libraries. Uses cURL and DOMDocument.
@@ -60,7 +59,6 @@ CSS;
 
 /* --------------------------- Globals & Flags --------------------------- */
 
-$VERBOSE = false;
 $PRESERVE_NUMBERS = false;
 
 /* --------------------------- Utilities --------------------------- */
@@ -86,7 +84,6 @@ function http_get(string $url, array $headers = [], int $timeout = 60): string {
     $resp = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
     $err = curl_error($ch);
-    curl_close($ch);
     if ($resp === false) {
         throw new RuntimeException("Network error: $err");
     }
@@ -152,7 +149,7 @@ function url_join(string $base, string $rel): string {
     }
     $dir = preg_replace('#/[^/]*$#', '/', $path);
     $abs = "$scheme://$host$port" . rtrim($dir, '/') . '/' . ltrim($rel, '/');
-    $abs = preg_replace('#(/\.?/)#', '/', $abs);
+    $abs = preg_replace('#(?<!:)(/\.?/)#', '/', $abs);
     while (preg_match('#/[^/]+/\.\./#', $abs)) {
         $abs = preg_replace('#/[^/]+/\.\./#', '/', $abs, 1);
     }
@@ -373,7 +370,7 @@ class URLWrapper {
     private array $parts;
     private string $scheme;
     private string $host;
-    private $port;
+    private ?int $port;
     private string $path;
     private array $queryParams = [];
     private string $fragment = '';
@@ -424,7 +421,6 @@ class URLWrapper {
  *  - Try multiple content selectors common to FanMTL.
  */
 function fetch_chapter_content(string $url, float $throttle = MINIMUM_THROTTLE): array {
-    global $VERBOSE;
     if ($throttle < MINIMUM_THROTTLE) $throttle = MINIMUM_THROTTLE;
     throttle($throttle);
     $html = http_get($url);
@@ -547,12 +543,6 @@ function fetch_chapter_content(string $url, float $throttle = MINIMUM_THROTTLE):
 
     $clean = clean_fragment_html($bestHtml, $url);
 
-    if ($VERBOSE) {
-        eprint("Fetched chapter page: $url");
-        eprint("  matched selector: " . ($matchedSelector ?: '(none)'));
-        eprint("  extracted title: " . ($foundTitle ?: '(empty)'));
-    }
-
     return ['title' => $foundTitle, 'content' => $clean];
 }
 
@@ -583,7 +573,6 @@ function extract_embedded_chapters(string $html, string $baseUrl): array {
  * so we don't miss the main-page block (chapters 1..100) which is present in HTML.
  */
 function parse_novel_page(string $url, float $throttle = MINIMUM_THROTTLE): array {
-    global $VERBOSE;
     if ($throttle < MINIMUM_THROTTLE) $throttle = MINIMUM_THROTTLE;
     eprint("Fetching novel page: $url");
     $html = http_get($url);
@@ -618,7 +607,6 @@ function parse_novel_page(string $url, float $throttle = MINIMUM_THROTTLE): arra
     // 1) Extract chapters from initial main page DOM first
     $seen = [];
     $initialPartials = extract_partial_chapter_list_from_dom($xpath, $url);
-    if ($VERBOSE) eprint("Found " . count($initialPartials) . " chapter links on main page block");
     foreach ($initialPartials as $p) {
         $href = $p['url'] ?? $url;
         $text = $p['name'] ?? '';
@@ -631,10 +619,6 @@ function parse_novel_page(string $url, float $throttle = MINIMUM_THROTTLE): arra
     // 2) Get TOC pages (AJAX endpoints /e/extend/fy.php?page=... etc) and fetch them
     $tocPageUrls = get_urls_of_toc_pages_from_dom($xpath, $url);
     if (empty($tocPageUrls)) $tocPageUrls = [$url];
-    if ($VERBOSE) {
-        eprint("Discovered " . count($tocPageUrls) . " TOC page(s):");
-        foreach ($tocPageUrls as $u) eprint("  - $u");
-    }
 
     foreach ($tocPageUrls as $tocUrl) {
         // skip main page (already processed)
@@ -644,7 +628,6 @@ function parse_novel_page(string $url, float $throttle = MINIMUM_THROTTLE): arra
             $tocHtml = http_get($tocUrl);
             [$tDoc, $tXpath] = load_dom($tocHtml);
             $partials = extract_partial_chapter_list_from_dom($tXpath, $tocUrl);
-            if ($VERBOSE) eprint("TOC page $tocUrl -> found " . count($partials) . " links");
             foreach ($partials as $p) {
                 $href = $p['url'] ?? $tocUrl;
                 $text = $p['name'] ?? '';
@@ -688,9 +671,6 @@ function parse_novel_page(string $url, float $throttle = MINIMUM_THROTTLE): arra
     for ($i = count($nums) - 1; $i >= 0; $i--) { if ($nums[$i] !== null) { $lastNum = $nums[$i]; break; } }
     if ($firstNum !== null && $lastNum !== null && $firstNum > $lastNum) {
         $novel['chapters'] = array_reverse($novel['chapters']);
-        if ($VERBOSE) eprint("Reversed chapter list to oldest-first (detected descending numeric labels)");
-    } elseif ($VERBOSE) {
-        eprint("Chapter ordering looks oldest-first already (or numeric labels not present)");
     }
 
     return $novel;
@@ -731,7 +711,7 @@ function show_help(): void {
 FanMTL Scraper — Readwn-style A5 Novel Archiver (Single-file)
 
 Usage:
-  php $name --url <URL> [--out <name>] [--start N] [--end N] [--throttle SEC] [--download] [--group-size N] [--verbose] [--preserve-numbers] [--help]
+  php $name --url <URL> [--out <name>] [--start N] [--end N] [--throttle SEC] [--download] [--group-size N] [--preserve-numbers] [--help]
 
 Options:
   --url         Novel main page URL (fanmtl.com)
@@ -741,7 +721,6 @@ Options:
   --throttle    Delay between requests in seconds (default: 3.0, minimum enforced)
   --download    Save to ~/storage/shared/Download if available (Termux)
   --group-size  Number of chapters per part (default: 100)
-  --verbose     Print discovered TOC URLs and per-page counts (debug)
   --preserve-numbers  Keep original site chapter titles (no renumbering)
   --help        Show this help
 
@@ -750,7 +729,7 @@ TXT
     exit(0);
 }
 
-$options = getopt('', ['url::', 'out::', 'start::', 'end::', 'throttle::', 'download::', 'group-size::', 'verbose::', 'preserve-numbers::', 'help::']);
+$options = getopt('', ['url:', 'out:', 'start:', 'end:', 'throttle:', 'download', 'group-size:', 'preserve-numbers', 'help']);
 if (isset($options['help'])) show_help();
 
 $url = $options['url'] ?? null;
@@ -761,7 +740,6 @@ $start = isset($options['start']) ? (int)$options['start'] : null;
 $end = isset($options['end']) ? (int)$options['end'] : null;
 $download = !empty($options['download']);
 $groupSize = isset($options['group-size']) ? max(1, (int)$options['group-size']) : 100;
-$VERBOSE = isset($options['verbose']) || $VERBOSE;
 $PRESERVE_NUMBERS = isset($options['preserve-numbers']) || $PRESERVE_NUMBERS;
 
 if (!$url) {
@@ -775,7 +753,6 @@ if (!$url) {
     echo "End chapter [last]: "; $e = trim(fgets(STDIN)); if ($e !== '') $end = (int)$e;
     echo "Save to Downloads? (y/N): "; $d = trim(fgets(STDIN)); if (in_array(strtolower($d), ['y', 'yes'])) $download = true;
     echo "Group size (chapters per file) [100]: "; $g = trim(fgets(STDIN)); if ($g !== '') $groupSize = max(1, (int)$g);
-    echo "Verbose? (y/N): "; $v = trim(fgets(STDIN)); if (in_array(strtolower($v), ['y','yes'])) $VERBOSE = true;
     echo "Preserve site numbering? (y/N): "; $p = trim(fgets(STDIN)); if (in_array(strtolower($p), ['y','yes'])) $PRESERVE_NUMBERS = true;
 }
 
@@ -807,7 +784,6 @@ try {
                 $novel['chapters'][$i]['name'] = $res['title'];
             }
             $novel['chapters'][$i]['content'] = $res['content'] ?: '<p><em>(empty chapter)</em></p>';
-            throttle(0.2);
         }
     }
 
@@ -817,7 +793,8 @@ try {
     // Ensure sequential chapter numbering in names (normalized numbering starting at --start or 1)
     if (!$PRESERVE_NUMBERS) {
         $startChapter = $start ?: 1;
-        for ($i = 0; $i < count($novel['chapters']); $i++) {
+        $chapterCount = count($novel['chapters']);
+        for ($i = 0; $i < $chapterCount; $i++) {
             $chapterNumber = $startChapter + $i;
             $origName = $novel['chapters'][$i]['name'] ?? '';
             $short = strip_leading_chapter_prefix($origName);
@@ -828,9 +805,6 @@ try {
                 $novel['chapters'][$i]['name'] = 'Chapter ' . $chapterNumber;
             }
         }
-        if ($VERBOSE) eprint("Renumbered chapters sequentially starting at " . ($start ?: 1));
-    } else {
-        if ($VERBOSE) eprint("Preserving original site chapter titles (no renumbering)");
     }
 
     // Determine base directory
