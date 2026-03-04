@@ -272,8 +272,8 @@ function url_join(string $base, string $rel): string {
     // Handle path-relative URLs.
     $dir = preg_replace('#/[^/]*$#', '/', $path);
     $abs = "$scheme://$host$port" . rtrim($dir, '/') . '/' . ltrim($rel, '/');
-    // Resolve '/./' and '/../' segments.
-    $abs = preg_replace('#(/\.?/)#', '/', $abs);
+    // Resolve '/./' and '/../' segments. Use (?<!:) to avoid collapsing '://' in the scheme.
+    $abs = preg_replace('#(?<!:)(/\.?/)#', '/', $abs);
     while (preg_match('#/[^/]+/\.\./#', $abs)) {
         $abs = preg_replace('#/[^/]+/\.\./#', '/', $abs, 1);
     }
@@ -467,6 +467,8 @@ function parse_novel_page(string $url, float $throttle = 1.0): array {
     eprint("Fetching novel page: $url");
     $html = http_get($url);
     [$doc, $xpath] = load_dom($html);
+    $parsedUrl = parse_url($url);
+    $siteBase = ($parsedUrl['scheme'] ?? 'https') . '://' . ($parsedUrl['host'] ?? '');
     $novel = [
         'url' => $url,
         'title' => '',
@@ -516,14 +518,14 @@ function parse_novel_page(string $url, float $throttle = 1.0): array {
         eprint("Fetching chapters via AJAX (novelId: $novelId)");
         try {
             throttle($throttle);
-            $ajaxHtml = http_get(BASE_URL . '/ajax/chapter-archive?novelId=' . urlencode($novelId), ['X-Requested-With: XMLHttpRequest']);
+            $ajaxHtml = http_get($siteBase . '/ajax/chapter-archive?novelId=' . urlencode($novelId), ['X-Requested-With: XMLHttpRequest']);
             [$aDoc, $aXpath] = load_dom($ajaxHtml);
             foreach ($aXpath->query("//ul[contains(@class,'list-chapter')]/li") as $li) {
                 $a = $aXpath->query(".//a", $li)->item(0);
                 $span = $aXpath->query(".//span", $li)->item(0);
                 if (!$a) continue;
                 $href = $a->getAttribute('href');
-                $href = url_join(BASE_URL, $href);
+                $href = url_join($siteBase, $href);
                 $name = $span ? trim($span->textContent) : trim($a->textContent);
                 $novel['chapters'][] = ['name' => $name, 'url' => $href];
             }
@@ -546,7 +548,7 @@ function parse_novel_page(string $url, float $throttle = 1.0): array {
                 $href = trim($a->getAttribute('href'));
                 $text = trim($a->textContent);
                 if (!$href || !$text) continue;
-                $href = url_join(BASE_URL, $href);
+                $href = url_join($siteBase, $href);
                 if (isset($seen[$href])) continue;
                 $seen[$href] = true;
                 $novel['chapters'][] = ['name' => $text, 'url' => $href];
@@ -621,7 +623,7 @@ TXT
     exit(0);
 }
 
-$options = getopt('', ['url::', 'out::', 'start::', 'end::', 'throttle::', 'download::', 'group-size::', 'help::']);
+$options = getopt('', ['url:', 'out:', 'start:', 'end:', 'throttle:', 'download', 'group-size:', 'help']);
 if (isset($options['help'])) show_help();
 
 $url = $options['url'] ?? null;
@@ -671,7 +673,6 @@ try {
                 $novel['chapters'][$i]['name'] = $res['title'];
             }
             $novel['chapters'][$i]['content'] = $res['content'] ?: '<p><em>(empty chapter)</em></p>';
-            throttle(0.2);
         }
     }
 
@@ -680,7 +681,8 @@ try {
 
     // Ensure sequential chapter numbering in names if not present
     $startChapter = $start ?: 1;
-    for ($i = 0; $i < count($novel['chapters']); $i++) {
+    $rangeCount = count($novel['chapters']);
+    for ($i = 0; $i < $rangeCount; $i++) {
         $chapterNumber = $startChapter + $i;
         if (!preg_match('/Chapter\s+\d+/i', $novel['chapters'][$i]['name'])) {
             $novel['chapters'][$i]['name'] = 'Chapter ' . $chapterNumber;
