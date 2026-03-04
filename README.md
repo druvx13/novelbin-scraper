@@ -1,137 +1,324 @@
-# NovelBin Scraper
+# Novel Scraper Collection
 
-A powerful, dependency-free PHP script designed to scrape novels from NovelBin-family websites and compile them into beautifully formatted, A5-optimized HTML files ready for printing or digital archiving.
+A collection of dependency-free PHP CLI scrapers that download web novels and
+compile them into beautifully formatted, A5-optimized HTML files ready for
+printing or offline reading.
 
-## Introduction
+Three scrapers are included, each targeting a different website:
 
-This script provides a simple and effective way to download and archive your favorite web novels for offline reading. It intelligently parses novel pages, extracts chapter content, and assembles everything into clean, readable HTML documents. The output is specifically styled for the A5 paper size, making it ideal for printing and binding into physical books.
+| Scraper | Target site | Script |
+|---|---|---|
+| **NovelBin** | `novelbin.com` / `novelbin.org` | `novelbin/novelbin.php` |
+| **FanMTL** | `fanmtl.com` | `fanmtl/fanmtl.php` |
+| **NovelHall** | `novelhall.com` | `novelhall/novelhall.php` |
+
+---
+
+## Table of Contents
+
+1. [Features](#features)
+2. [Requirements](#requirements)
+3. [Installation](#installation)
+4. [Quick Start](#quick-start)
+5. [Common Options](#common-options)
+6. [Scraper Reference](#scraper-reference)
+   - [NovelBin](#novelbin)
+   - [FanMTL](#fanmtl)
+   - [NovelHall](#novelhall)
+7. [Output Structure](#output-structure)
+8. [How It Works](#how-it-works)
+9. [Troubleshooting](#troubleshooting)
+10. [Running the Tests](#running-the-tests)
+11. [Contributing](#contributing)
+12. [License](#license)
+
+---
 
 ## Features
 
-- **Zero Dependencies**: Runs on standard PHP without needing Composer or any external libraries.
-- **A5-Optimized Output**: Generates HTML with CSS specifically designed for A5 paper, featuring a classic book-like font (Libre Baskerville) and layout.
-- **Flexible Chapter Grouping**: Combine chapters into parts of any size (e.g., 100 chapters per file), making large novels manageable.
-- **Intelligent Content Extraction**: Employs multiple strategies to find and clean chapter content, removing ads, navigation menus, and other non-essential elements.
-- **AJAX and Static Scraping**: Capable of fetching chapter lists from both modern AJAX-based loaders and traditional static HTML links.
-- **Termux Compatibility**: Includes a `--download` flag for easy saving to the shared `Download` folder on Android devices via Termux.
-- **Resilient and Robust**: Handles relative URLs, sanitizes filenames, and includes configurable throttling to avoid overwhelming the server.
+- **Zero dependencies** — standard PHP only; no Composer, no external libraries.
+- **A5-optimized HTML output** — embedded CSS styled for A5 paper with a
+  classic serif font (Libre Baskerville).
+- **Flexible chapter grouping** — split any novel into parts of any size
+  (default: 100 chapters per file).
+- **Intelligent content extraction** — heuristic scoring picks the best
+  content block; removes ads, navigation, comments, and boilerplate.
+- **Multiple TOC strategies** — AJAX endpoint, multi-page pagination, static
+  link scraping, and embedded-chapter detection.
+- **Sequential renumbering** — chapters are renumbered `Chapter N: Title` by
+  default; use `--preserve-numbers` to keep original site titles.
+- **Auto-order correction** — if the chapter list appears to be in descending
+  order it is automatically reversed.
+- **Termux / Android friendly** — `--download` saves directly to
+  `~/storage/shared/Download`.
+- **Configurable throttle** — minimum enforced per-scraper; respects server
+  rate limits.
+
+---
 
 ## Requirements
 
-- PHP 7.4 or newer
-- `php-curl` extension (for HTTP requests)
-- `php-xml` extension (for DOM parsing)
-- `php-mbstring` extension (for multi-byte string operations)
+- PHP **8.0** or newer (PHP 8.1+ recommended)
+- PHP extensions: `curl`, `xml` / `dom`, `mbstring`
+
+### Installing PHP on Termux (Android)
+
+```bash
+pkg update && pkg install php
+```
+
+### Installing PHP on Debian / Ubuntu
+
+```bash
+sudo apt install php php-curl php-xml php-mbstring
+```
+
+### Installing PHP on macOS (Homebrew)
+
+```bash
+brew install php
+```
+
+---
 
 ## Installation
 
-1.  Ensure you have PHP and the required extensions installed on your system.
-2.  Download the `index.php` script to a directory of your choice.
-3.  Make sure the script is executable (optional but recommended for CLI usage):
-    ```bash
-    chmod +x index.php
-    ```
-
-## Usage
-
-The script can be run either interactively or directly via command-line arguments.
-
-### Interactive Mode
-
-For a guided experience, run the script without any arguments:
+Clone or download the repository:
 
 ```bash
-php index.php
+git clone https://github.com/druvx13/novelbin-scraper.git
+cd novelbin-scraper
 ```
 
-The script will prompt you to enter the novel URL, the desired output name, chapter range, and other settings.
+No build step is needed. Each scraper is a single self-contained PHP file.
 
-### Command-Line Arguments
+---
 
-For automation and advanced usage, provide the options as command-line flags.
+## Quick Start
 
 ```bash
-php index.php --url "<URL>" [--out "Name"] [--start N] [--end N] [--throttle 1.0] [--download] [--group-size 100] [--help]
+# NovelBin
+php novelbin/novelbin.php --url "https://novelbin.com/b/super-gene" --start 1 --end 10
+
+# FanMTL
+php fanmtl/fanmtl.php --url "https://www.fanmtl.com/novel/6954524.html" --start 1 --end 5
+
+# NovelHall
+php novelhall/novelhall.php --url "https://www.novelhall.com/a-novel-name-12345/" --start 1 --end 5
 ```
 
-#### Options:
+Run without `--url` to enter **interactive mode** (step-by-step prompts):
 
--   `--url`: **(Required)** The URL of the novel's main page.
--   `--out`: The base name for the output folder and HTML files. If omitted, the script uses the novel's title.
--   `--start`: The first chapter to download (1-based index). Defaults to the very first chapter.
--   `--end`: The last chapter to download (1-based index). Defaults to the very last chapter.
--   `--throttle`: The delay in seconds between consecutive HTTP requests to avoid rate-limiting. Default is `1.0`.
--   `--download`: A flag that, when present, instructs the script to save files in `~/storage/shared/Download` (primarily for Termux users).
--   `--group-size`: The number of chapters to include in each generated HTML file. Default is `100`.
--   `--help`: Displays the help message and exits.
-
-### Usage Examples
-
-**1. Basic Download**
-Download all chapters of a novel and let the script determine the name.
 ```bash
-php index.php --url "https://novelbin.org/novel/the-legend-of-the-arch-magus"
+php novelbin/novelbin.php
 ```
 
-**2. Specific Chapter Range and Grouping**
-Download chapters 51 to 250, grouping them into files of 100 chapters each.
+---
+
+## Common Options
+
+All three scrapers share the same core set of options:
+
+| Option | Description | Default |
+|---|---|---|
+| `--url <URL>` | Novel main page URL **(required)** | — |
+| `--out <name>` | Output folder / filename base | novel title |
+| `--start <N>` | First chapter to download (1-based) | `1` |
+| `--end <N>` | Last chapter to download (1-based) | last |
+| `--throttle <sec>` | Seconds between requests | scraper default |
+| `--download` | Save to `~/storage/shared/Download` (Termux) | off |
+| `--group-size <N>` | Chapters per output file | `100` |
+| `--preserve-numbers` | Keep original site chapter titles | off |
+| `--help` | Show help and exit | — |
+
+---
+
+## Scraper Reference
+
+### NovelBin
+
+**Script:** `novelbin/novelbin.php`  
+**Supported domains:** `novelbin.com`, `novelbin.org`, `thenovelbin.org`, `novlove.com`  
+**Default throttle:** 1.0 s
+
+#### How chapter lists are fetched
+
+1. Looks for a `data-novel-id` attribute and requests
+   `/ajax/chapter-archive?novelId=<id>` (primary AJAX strategy).
+2. Falls back to scanning `div.list-chapter a` and similar selectors.
+
+#### Example
+
 ```bash
-php index.php --url "https://novelbin.org/novel/super-gene" --start 51 --end 250 --group-size 100
+php novelbin/novelbin.php \
+  --url "https://novelbin.com/b/super-gene" \
+  --start 1 --end 100 \
+  --throttle 1.5 \
+  --download
 ```
-*Output*: Two files, `Super-Gene(51-150).html` and `Super-Gene(151-250).html`.
 
-**3. Custom Output Name and Slower Pace**
-Download the first 50 chapters with a custom name and a 2-second delay between requests.
+Full reference: [`novelbin/README.md`](novelbin/README.md)
+
+---
+
+### FanMTL
+
+**Script:** `fanmtl/fanmtl.php`  
+**Supported domains:** `fanmtl.com`, `www.fanmtl.com`  
+**Default throttle:** 3.0 s (minimum enforced)
+
+#### How chapter lists are fetched
+
+FanMTL uses a Readwn-style multi-page TOC. The scraper:
+
+1. Detects `?page=N` or `/page/N/` pagination links.
+2. Iterates over every TOC page, collecting `ul.chapter-list a` entries.
+3. Falls back to `rel="next"` link following, then generic link scanning.
+
+#### Example
+
 ```bash
-php index.php --url "https://novelbin.org/novel/versatile-mage" --out "VMage" --end 50 --throttle 2.0
+php fanmtl/fanmtl.php \
+  --url "https://www.fanmtl.com/novel/6954524.html" \
+  --start 51 \
+  --preserve-numbers
 ```
-*Output*: A folder named `VMage` containing `VMage(1-50).html`.
 
-## How It Works
+Full reference: [`fanmtl/README.md`](fanmtl/README.md)
 
-The script follows a multi-step process to scrape and assemble the novel:
+---
 
-1.  **Parse Main Page**: It first fetches the main novel URL provided via the `--url` argument.
-2.  **Extract Metadata**: It parses the page to find the novel's title, author, summary, and cover image URL.
-3.  **Find Chapter List**: The script attempts two methods to get the chapter list:
-    *   **AJAX Request (Primary)**: It looks for a `novelId` in the HTML and uses it to make an AJAX request to a chapter archive endpoint. This is the most reliable method for modern NovelBin sites.
-    *   **Static Scraping (Fallback)**: If the AJAX method fails, it scans the page for all links that appear to be chapters and compiles a list from them.
-4.  **Fetch Chapter Content**: It iterates through the desired range of chapters. For each chapter, it sends an HTTP request to its URL.
-5.  **Clean and Extract**: The downloaded chapter HTML is aggressively cleaned. The script uses a series of XPath queries to identify the main content block while removing navigation, sidebars, comment sections, and other boilerplate. The chapter title is also extracted.
-6.  **Build HTML Parts**: The cleaned chapters are grouped according to the `--group-size`.
-7.  **Generate Final Document**: For each group, it generates a complete HTML file, embedding the A5-optimized CSS, the novel's metadata (title, author, summary), and the chapter content. The final file is saved to disk.
+### NovelHall
+
+**Script:** `novelhall/novelhall.php`  
+**Supported domains:** `novelhall.com`, `www.novelhall.com`  
+**Default throttle:** 1.0 s
+
+#### How chapter lists are fetched
+
+All `div.book-catalog` blocks are collected; the one containing the most
+`<a>` elements is used as the chapter list (mirrors WebToEpub's
+`NovelhallParser.getChapterUrls` logic).
+
+#### Metadata selectors
+
+| Field | Selector |
+|---|---|
+| Title | `div.book-info h1` |
+| Author | `<meta property="books:author">` content |
+| Summary | `div.book-info div.intro` |
+| Cover | `div.book-img img` |
+| Chapter content | `article div.entry-content` |
+| Chapter title | `article div.single-header h1` |
+
+#### Example
+
+```bash
+php novelhall/novelhall.php \
+  --url "https://www.novelhall.com/a-novel-name-12345/" \
+  --start 1 --end 50
+```
+
+Full reference: [`novelhall/README.md`](novelhall/README.md)
+
+---
 
 ## Output Structure
 
-The script creates a main folder in the current directory (or the `Download` folder if `--download` is used). The folder's name is either the sanitized novel title or the name specified with `--out`.
+Each scraper creates a folder (named after the novel or `--out`) and fills it
+with part files:
 
-Inside this folder, the HTML files are generated. The naming convention is:
-`{OutputName}({StartChapter}-{EndChapter}).html`
+```
+Super Gene/
+├── Super Gene(1-100).html
+├── Super Gene(101-200).html
+└── Super Gene(201-250).html
+```
 
-For example, with `--out "My-Novel"` and `--group-size 50`, the output would look like this:
+- Folder location: current working directory, or
+  `~/storage/shared/Download` when `--download` is set.
+- File naming: `{OutputName}({startChapter}-{endChapter}).html`
+- Each HTML file is self-contained (inlined CSS, no external assets).
+
+---
+
+## How It Works
+
+Every scraper follows the same pipeline:
+
 ```
-My-Novel/
-├── My-Novel(1-50).html
-├── My-Novel(51-100).html
-└── My-Novel(101-150).html
+1. Fetch novel page
+        │
+        ▼
+2. Extract metadata (title, author, summary, cover)
+        │
+        ▼
+3. Build chapter list  ──────────────────────────────────────────────
+   │  Strategy A: AJAX endpoint (NovelBin)                          │
+   │  Strategy B: Paginated TOC (FanMTL)                            │
+   │  Strategy C: Largest div.book-catalog block (NovelHall)        │
+   └──> fallback: generic link scan                                  │
+        │                                                            │
+        ▼                                                            │
+4. Slice to --start / --end range                                    │
+        │                                                            │
+        ▼                                                            │
+5. Fetch each chapter page (throttled)                               │
+   └──> score candidate content blocks by text length + ¶ count     │
+   └──> extract chapter title                                        │
+   └──> strip scripts, ads, nav, comments                           │
+        │                                                            │
+        ▼                                                            │
+6. Optionally renumber chapters (Chapter N: Short Title)            │
+        │                                                            │
+        ▼                                                            │
+7. Split into groups (--group-size)                                  │
+        │                                                            │
+        ▼                                                            │
+8. Write A5 HTML file(s) to disk                                     │
 ```
+
+---
 
 ## Troubleshooting
 
--   **"No chapters found"**: This can happen if the website has changed its layout significantly. Ensure the domain is on the supported list. If it is, the script's XPath selectors may need updating.
--   **"HTTP 403 Forbidden"**: The website may be blocking the script's User-Agent or IP. Try increasing the `--throttle` value to be more respectful of the server's rate limits.
--   **"Maximum execution time exceeded"**: For very large novels, the script might time out. You can run it from the command line with a higher time limit: `php -d max_execution_time=0 index.php ...`.
--   **Garbled Text**: Ensure your system's `php.ini` has `mbstring` enabled and properly configured for UTF-8.
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| `No chapters found` | Site layout changed or wrong URL | Check the URL; see scraper README for selectors |
+| `HTTP 403 / 429` | Rate limiting or bot detection | Increase `--throttle`; try a different IP |
+| `HTTP 404` | Novel has moved or been deleted | Verify the URL in a browser |
+| Garbled/missing text | `mbstring` not enabled | `php -m | grep mbstring`; enable in `php.ini` |
+| Very slow download | Throttle is too high | Lower `--throttle` (keep it ≥ 1.0 to be safe) |
+| Empty chapter content | Selector mismatch | File a bug with the novel URL |
+| `curl_close()` warning | PHP ≥ 8.5 | Already removed in all scrapers — upgrade to latest version |
 
-## Supported Sites
+---
 
-The script is primarily tested and maintained for the following domains. It may work on other mirrors with similar HTML structures.
+## Running the Tests
 
--   `novelbin.org`
--   `thenovelbin.org`
--   `novelbin.com`
--   `novlove.com`
+A unit test suite covers shared utility functions (URL joining, filename
+sanitizing, DOM helpers, content cleaning):
+
+```bash
+php tests.php
+```
+
+Expected output:
+
+```
+Results: 20 passed / 20 total
+```
+
+---
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for instructions on adding new scrapers,
+coding conventions, and the test layout.
+
+---
 
 ## License
 
-This project is licensed under the terms of the FFP license. See the [LICENSE](LICENSE.md) file for more details.
+This project is licensed under the terms of the FFP license.  
+See [LICENSE.md](LICENSE.md) for the full text.
