@@ -1,4 +1,3 @@
-#!/usr/bin/env php
 <?php
 /**
  * NovelBin Scraper — Perfect A5 Novel Archiver (Split into parts)
