@@ -134,4 +134,4 @@ The script is primarily tested and maintained for the following domains. It may 
 
 ## License
 
-This project is licensed under the terms of the MIT license. See the [LICENSE](LICENSE) file for more details.
+This project is licensed under the terms of the FFP license. See the [LICENSE](LICENSE.md) file for more details.
