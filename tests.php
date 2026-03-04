@@ -15,7 +15,7 @@ declare(strict_types=1);
 
 // Capture the original argv so the script's global code (which reads argv/stdin)
 // is never reached; we include only up to the function definitions.
-$sourceCode = file_get_contents(__DIR__ . '/index.php');
+$sourceCode = file_get_contents(__DIR__ . '/novelbin/novelbin.php');
 
 // Strip the shebang line so eval() does not choke on it.
 $sourceCode = preg_replace('/^#!.*\n/', '', $sourceCode, 1);
